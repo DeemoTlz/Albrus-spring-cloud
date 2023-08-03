@@ -18,7 +18,10 @@
     <description>Albrus-spring-cloud</description>
 
     <modules>
-        <module>albrus-cloud-provider-payment8001</module>
+        <module>cloud-api-common</module>
+        <module>cloud-provider-payment8080-api</module>
+        <module>cloud-provider-payment8001</module>
+        <module>cloud-consumer-order80</module>
     </modules>
 
     <properties>
