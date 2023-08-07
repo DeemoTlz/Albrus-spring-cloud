@@ -107,3 +107,96 @@ Eureka 包含两个组件：Eureka Server 和 Eureka Client。
 
    在应用启动后，客户端将会向 Eureka Server 发送心跳（默认周期为 30 秒）。如果 Eureka Server 在多个心跳周期内没有接收到某个节点的心跳，Eureka Server 将会从服务注册表中把这个服务节点移除（默认 90 秒）。
 
+### 2.2 Eureka Server
+
+`pom.xml`:
+
+```xml
+<!-- eureka-server -->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-netflix-eureka-server</artifactId>
+</dependency>
+```
+
+`application.yaml`:
+
+```yaml
+server:
+  port: 7001
+
+eureka:
+  instance:
+    hostname: localhost  # eureka 服务器实例名称
+  client:
+    register-with-eureka: false  # 不向注册中心注册自己
+    fetch-registry: false  # false 表示本机是注册中心
+    service-url:
+      defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka  # 设置与 eureka 的交互地址
+```
+
+`Application.java`:
+
+```java
+@EnableEurekaServer
+@SpringBootApplication
+public class AlbrusCloudEurekaServer7001Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(AlbrusCloudEurekaServer7001Application.class);
+    }
+
+}
+```
+
+![image-20230807211826190](./images/image-20230807211826190.png)
+
+EurekaServer 自我保护机制：
+
+![image-20230807212117315](./images/image-20230807212117315.png)
+
+### 2.3 Eureka Client
+
+`pom.xml`:
+
+```xml
+<!-- eureka-client -->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+</dependency>
+```
+
+`application.yaml`:
+
+```yaml
+spring:
+  application:
+    name: albrus-cloud-payment-service  # 注意在 EurekaServer 中 Application 名称
+
+eureka:
+  client:
+    register-with-eureka: true  # 将自己注册到 EurekaServer
+    fetch-registry: true  # 是否从 EurekaServer 抓取已有的注册信息，默认为 true。单节点无所谓，集群必须设置为 true 才能配合 ribbon 使用负载均衡
+    service-url:
+      defaultZone: http://localhost:7001/eureka
+```
+
+`Application.java`:
+
+```java
+@EnableEurekaClient
+@SpringBootApplication
+public class AlbrusCloudPayment8001Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(AlbrusCloudPayment8001Application.class, args);
+    }
+
+}
+```
+
+![image-20230807211930506](./images/image-20230807211930506.png)
+
+
+
