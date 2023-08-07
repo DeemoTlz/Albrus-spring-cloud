@@ -107,7 +107,7 @@ Eureka 包含两个组件：Eureka Server 和 Eureka Client。
 
    在应用启动后，客户端将会向 Eureka Server 发送心跳（默认周期为 30 秒）。如果 Eureka Server 在多个心跳周期内没有接收到某个节点的心跳，Eureka Server 将会从服务注册表中把这个服务节点移除（默认 90 秒）。
 
-### 2.2 Eureka Server
+#### 2.1.1 Eureka Server
 
 `pom.xml`:
 
@@ -126,13 +126,16 @@ server:
   port: 7001
 
 eureka:
+  server:
+    eviction-interval-timer-in-ms: 60  # 定期检测实例状态（心跳机制） 默认60s
+    enable-self-preservation: true  # 关闭自我保护 默认为打开状态，生产环境建议打开
   instance:
     hostname: localhost  # eureka 服务器实例名称
   client:
     register-with-eureka: false  # 不向注册中心注册自己
     fetch-registry: false  # false 表示本机是注册中心
     service-url:
-      defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka  # 设置与 eureka 的交互地址
+      defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka/  # 设置与 eureka 的交互地址
 ```
 
 `Application.java`:
@@ -155,9 +158,9 @@ EurekaServer 自我保护机制：
 
 ![image-20230807212117315](./images/image-20230807212117315.png)
 
-### 2.3 Eureka Client
+#### 2.1.2 Eureka Client
 
-#### 2.3.1 Provider
+##### 2.1.2.1 Provider
 
 `pom.xml`:
 
@@ -181,7 +184,19 @@ eureka:
     register-with-eureka: true  # 将自己注册到 EurekaServer
     fetch-registry: true  # 是否从 EurekaServer 抓取已有的注册信息，默认为 true。单节点无所谓，集群必须设置为 true 才能配合 ribbon 使用负载均衡
     service-url:
-      defaultZone: http://localhost:7001/eureka
+      defaultZone: http://localhost:7001/eureka/  # 路径包含 /eureka 是因为 EurekaServer 内部有 web 过滤器
+    registry-fetch-interval-seconds: 30  # 隔多久从服务中心拉取一次服务列表，默认 30s
+  instance:
+    # 使用 IP 注册，否则会使用主机注册（此处考虑老版本的兼容，新版本经过实验都是 IP）
+    prefer-ip-address: true
+    # 自定义实例显示格式，加上版本号便于多版本管理，注意是 ip-address，早期版本是 ipaddress
+    instance-id: ${spring.cloud.client.ip-address}:${spring.application.name}:${server.port}:@project.version@
+    # 自定义元数据（key/value 结构）
+    metadata-map:
+      cluster: cll
+      region: rnl
+    lease-renewal-interval-in-seconds: 30  # 租约续约间隔时间，默认 30s
+    lease-expiration-duration-in-seconds: 90  # 租约到期，服务时效时间，默认值 90s，服务超过 90s 没有发⽣⼼跳，EurekaServer 会将服务从列表移除
 ```
 
 `Application.java`:
@@ -200,7 +215,7 @@ public class AlbrusCloudPayment8001Application {
 
 ![image-20230807211930506](./images/image-20230807211930506.png)
 
-#### 2.3.2 Consumer
+##### 2.1.2.2 Consumer
 
 `pom.xml`:
 
@@ -224,7 +239,19 @@ eureka:
     register-with-eureka: true  # 将自己注册到 EurekaServer
     fetch-registry: true  # 是否从 EurekaServer 抓取已有的注册信息，默认为 true。单节点无所谓，集群必须设置为 true 才能配合 ribbon 使用负载均衡
     service-url:
-      defaultZone: http://localhost:7001/eureka
+      defaultZone: http://localhost:7001/eureka/  # 路径包含 /eureka 是因为 EurekaServer 内部有 web 过滤器
+    registry-fetch-interval-seconds: 30  # 隔多久从服务中心拉取一次服务列表，默认 30s
+  instance:
+    # 使用 IP 注册，否则会使用主机注册（此处考虑老版本的兼容，新版本经过实验都是 IP）
+    prefer-ip-address: true
+    # 自定义实例显示格式，加上版本号便于多版本管理，注意是 ip-address，早期版本是 ipaddress
+    instance-id: ${spring.cloud.client.ip-address}:${spring.application.name}:${server.port}:@project.version@
+    # 自定义元数据（key/value 结构）
+    metadata-map:
+      cluster: cll
+      region: rnl
+    lease-renewal-interval-in-seconds: 30  # 租约续约间隔时间，默认 30s
+    lease-expiration-duration-in-seconds: 90  # 租约到期，服务时效时间，默认值 90s，服务超过 90s 没有发⽣⼼跳，EurekaServer 会将服务从列表移除
 ```
 
 `Application.java`:
@@ -242,4 +269,44 @@ public class AlbrusCloudConsumerOrder80Application {
 ```
 
 ![image-20230807213256305](./images/image-20230807213256305.png)
+
+#### 2.1.3 Eureka 集群
+
+![image-20230807213938814](./images/image-20230807213938814.png)
+
+单点故障：**集群，负载均衡 + 故障容错**。
+
+##### 2.1.3.1 Eureka Server 集群
+
+> **互相注册、互相守望**：[A、B、C] -> [A: [B、C]、B[A、C]、C[A、B]]。
+
+`org.springframework.cloud.netflix.eureka.EurekaClientConfigBean#getEurekaServerServiceUrls`:
+
+```java
+@Override
+public List<String> getEurekaServerServiceUrls(String myZone) {
+    // 从 application.yaml 中获取 service-url 
+    String serviceUrls = this.serviceUrl.get(myZone);
+    if (serviceUrls == null || serviceUrls.isEmpty()) {
+        // 最后会尝试获取 DEFAULT_ZONE = defaultZone 
+        serviceUrls = this.serviceUrl.get(DEFAULT_ZONE);
+    }
+    
+    if (!StringUtils.isEmpty(serviceUrls)) {
+        // 按 , 分割获取到的服务路径
+        final String[] serviceUrlsSplit = StringUtils.commaDelimitedListToStringArray(serviceUrls);
+        List<String> eurekaServiceUrls = new ArrayList<>(serviceUrlsSplit.length);
+        for (String eurekaServiceUrl : serviceUrlsSplit) {
+            // 给结尾添加 /
+            if (!endsWithSlash(eurekaServiceUrl)) {
+                eurekaServiceUrl += "/";
+            }
+            eurekaServiceUrls.add(eurekaServiceUrl.trim());
+        }
+        return eurekaServiceUrls;
+    }
+
+    return new ArrayList<>();
+}
+```
 

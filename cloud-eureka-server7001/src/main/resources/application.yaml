@@ -2,10 +2,13 @@ server:
   port: 7001
 
 eureka:
+  server:
+    eviction-interval-timer-in-ms: 60  # 定期检测实例状态（心跳机制） 默认60s
+    enable-self-preservation: true  # 关闭自我保护 默认为打开状态，生产环境建议打开
   instance:
     hostname: localhost  # eureka 服务器实例名称
   client:
     register-with-eureka: false  # 不向注册中心注册自己
     fetch-registry: false  # false 表示本机是注册中心
     service-url:
-      defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka  # 设置与 eureka 的交互地址
+      defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka/  # 设置与 eureka 的交互地址
