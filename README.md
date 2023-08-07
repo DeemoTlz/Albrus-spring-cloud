@@ -157,6 +157,8 @@ EurekaServer 自我保护机制：
 
 ### 2.3 Eureka Client
 
+#### 2.3.1 Provider
+
 `pom.xml`:
 
 ```xml
@@ -198,5 +200,46 @@ public class AlbrusCloudPayment8001Application {
 
 ![image-20230807211930506](./images/image-20230807211930506.png)
 
+#### 2.3.2 Consumer
 
+`pom.xml`:
+
+```xml
+<!-- eureka-client -->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+</dependency>
+```
+
+`application.yaml`:
+
+```yaml
+spring:
+  application:
+    name: albrus-cloud-order-service
+
+eureka:
+  client:
+    register-with-eureka: true  # 将自己注册到 EurekaServer
+    fetch-registry: true  # 是否从 EurekaServer 抓取已有的注册信息，默认为 true。单节点无所谓，集群必须设置为 true 才能配合 ribbon 使用负载均衡
+    service-url:
+      defaultZone: http://localhost:7001/eureka
+```
+
+`Application.java`:
+
+```java
+@EnableEurekaClient
+@SpringBootApplication
+public class AlbrusCloudConsumerOrder80Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(AlbrusCloudConsumerOrder80Application.class, args);
+    }
+
+}
+```
+
+![image-20230807213256305](./images/image-20230807213256305.png)
 
