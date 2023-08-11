@@ -282,6 +282,12 @@ public class AlbrusCloudConsumerOrder80Application {
 
 单点故障：**集群，负载均衡 + 故障容错**。
 
+启动顺序：
+
+1. Eureka Server * 2
+2. Eureka Client Payment * 2
+3. Eureka Client Consumer * 1
+
 ##### 2.1.3.1 Eureka Server 集群
 
 > **互相注册、互相守望**：[A、B、C] -> [A: [B、C]、B[A、C]、C[A、B]]。
@@ -490,5 +496,6 @@ eureka:
  * 通过在 eureka 上注册过的微服务名称调用
  */
 private static final String BASE_URL = "http://ALBRUS-CLOUD-PAYMENT-SERVICE";
-```
 
+// 2023-08-11 19:43:32.669  WARN 17336 --- [  restartedMain] iguration$LoadBalancerCaffeineWarnLogger : Spring Cloud LoadBalancer is currently working with the default cache. While this cache implementation is useful for development and tests, it's recommended to use Caffeine cache in production.You can switch to using Caffeine cache, by adding it and org.springframework.cache.caffeine.CaffeineCacheManager to the classpath.
+```
