@@ -11,4 +11,4 @@ eureka:
     register-with-eureka: false  # 不向注册中心注册自己
     fetch-registry: false  # false 表示本机是注册中心
     service-url:
-      defaultZone: http://eureka7001.com:7001/eureka/  # 设置与 eureka 的交互地址，用 , 分割配置多个地址
+      defaultZone: http://eureka7002.com:7002/eureka/  # 设置与 eureka 的交互地址，用 , 分割配置多个地址

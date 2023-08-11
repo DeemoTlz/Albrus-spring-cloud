@@ -17,7 +17,11 @@ import org.springframework.web.client.RestTemplate;
 @RequestMapping("/consumer/order")
 public class OrderController {
 
-    private static final String BASE_URL = "http://127.0.0.1:8001";
+    // private static final String BASE_URL = "http://127.0.0.1:8001";
+    /**
+     * 通过在 eureka 上注册过的微服务名称调用
+     */
+    private static final String BASE_URL = "http://ALBRUS-CLOUD-PAYMENT-SERVICE";
 
     private static final String PAYMENT_URL = BASE_URL + "/payment";
 

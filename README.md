@@ -175,6 +175,9 @@ EurekaServer 自我保护机制：
 `application.yaml`:
 
 ```yaml
+server:
+  port: 8001
+
 spring:
   application:
     name: albrus-cloud-payment-service  # 注意在 EurekaServer 中 Application 名称
@@ -230,6 +233,9 @@ public class AlbrusCloudPayment8001Application {
 `application.yaml`:
 
 ```yaml
+server:
+  port: 80
+
 spring:
   application:
     name: albrus-cloud-order-service
@@ -308,5 +314,181 @@ public List<String> getEurekaServerServiceUrls(String myZone) {
 
     return new ArrayList<>();
 }
+```
+
+`application.yaml`:
+
+```yaml
+# Eureka Server 7001
+server:
+  port: 7001
+
+eureka:
+  server:
+    eviction-interval-timer-in-ms: 60  # 定期检测实例状态（心跳机制） 默认60s
+    enable-self-preservation: true  # 关闭自我保护 默认为打开状态，生产环境建议打开
+  instance:
+    hostname: eureka7001.com  # eureka 服务器实例名称
+  client:
+    register-with-eureka: false  # 不向注册中心注册自己
+    fetch-registry: false  # false 表示本机是注册中心
+    service-url:
+      defaultZone: http://eureka7001.com:7001/eureka/  # 设置与 eureka 的交互地址，用 , 分割配置多个地址
+
+# Eureka Server 7002
+server:
+  port: 7002
+
+eureka:
+  server:
+    eviction-interval-timer-in-ms: 60  # 定期检测实例状态（心跳机制） 默认60s
+    enable-self-preservation: true  # 关闭自我保护 默认为打开状态，生产环境建议打开
+  instance:
+    hostname: eureka7002.com  # eureka 服务器实例名称
+  client:
+    register-with-eureka: false  # 不向注册中心注册自己
+    fetch-registry: false  # false 表示本机是注册中心
+    service-url:
+      defaultZone: http://eureka7002.com:7002/eureka/  # 设置与 eureka 的交互地址，用 , 分割配置多个地址
+```
+
+**Eureka Client Provider 注册**
+
+`application.yaml`:
+
+```yaml
+server:
+  port: 8001
+
+spring:
+  application:
+    name: albrus-cloud-payment-service
+
+eureka:
+  client:
+    register-with-eureka: true  # 将自己注册到 EurekaServer
+    fetch-registry: true  # 是否从 EurekaServer 抓取已有的注册信息，默认为 true。单节点无所谓，集群必须设置为 true 才能配合 ribbon 使用负载均衡
+    service-url:
+      # defaultZone: http://localhost:7001/eureka/  # 路径包含 /eureka 是因为 EurekaServer 内部有 web 过滤器
+      defaultZone: http://eureka7001.com:7001/eureka/, http://eureka7002.com:7002/eureka/  # 集群配置
+    registry-fetch-interval-seconds: 30  # 隔多久从服务中心拉取一次服务列表，默认 30s
+  instance:
+    # 使用 IP 注册，否则会使用主机注册（此处考虑老版本的兼容，新版本经过实验都是 IP）
+    prefer-ip-address: true
+    # 自定义实例显示格式，加上版本号便于多版本管理，注意是 ip-address，早期版本是 ipaddress
+    instance-id: ${spring.cloud.client.ip-address}:${spring.application.name}:${server.port}:@project.version@
+    # 自定义元数据（key/value 结构）
+    metadata-map:
+      cluster: cll
+      region: rnl
+    lease-renewal-interval-in-seconds: 30  # 租约续约间隔时间，默认 30s
+    lease-expiration-duration-in-seconds: 90  # 租约到期，服务时效时间，默认值 90s，服务超过 90s 没有发⽣⼼跳，EurekaServer 会将服务从列表移除
+```
+
+**Eureka Client Consumer 注册**
+
+`application.yaml`:
+
+```yaml
+server:
+  port: 80
+
+spring:
+  application:
+    name: albrus-cloud-order-service
+
+eureka:
+  client:
+    register-with-eureka: true  # 将自己注册到 EurekaServer
+    fetch-registry: true  # 是否从 EurekaServer 抓取已有的注册信息，默认为 true。单节点无所谓，集群必须设置为 true 才能配合 ribbon 使用负载均衡
+    service-url:
+      # defaultZone: http://localhost:7001/eureka/  # 路径包含 /eureka 是因为 EurekaServer 内部有 web 过滤器
+      defaultZone: http://eureka7001.com:7001/eureka/, http://eureka7002.com:7002/eureka/  # 集群配置
+    registry-fetch-interval-seconds: 30  # 隔多久从服务中心拉取一次服务列表，默认 30s
+  instance:
+    # 使用 IP 注册，否则会使用主机注册（此处考虑老版本的兼容，新版本经过实验都是 IP）
+    prefer-ip-address: true
+    # 自定义实例显示格式，加上版本号便于多版本管理，注意是 ip-address，早期版本是 ipaddress
+    instance-id: ${spring.cloud.client.ip-address}:${spring.application.name}:${server.port}:@project.version@
+    # 自定义元数据（key/value 结构）
+    metadata-map:
+      cluster: cll
+      region: rnl
+    lease-renewal-interval-in-seconds: 30  # 租约续约间隔时间，默认 30s
+    lease-expiration-duration-in-seconds: 90  # 租约到期，服务时效时间，默认值 90s，服务超过 90s 没有发⽣⼼跳，EurekaServer 会将服务从列表移除
+```
+
+##### 2.1.3.2 Eureka Client 集群
+
+**Eureka Client Provider**
+
+`application.xml`:
+
+```yaml
+server:
+  port: 8001
+
+spring:
+  application:
+    name: albrus-cloud-payment-service
+
+eureka:
+  client:
+    register-with-eureka: true  # 将自己注册到 EurekaServer
+    fetch-registry: true  # 是否从 EurekaServer 抓取已有的注册信息，默认为 true。单节点无所谓，集群必须设置为 true 才能配合 ribbon 使用负载均衡
+    service-url:
+      # defaultZone: http://localhost:7001/eureka/  # 路径包含 /eureka 是因为 EurekaServer 内部有 web 过滤器
+      defaultZone: http://eureka7001.com:7001/eureka/, http://eureka7002.com:7002/eureka/  # 集群配置
+    registry-fetch-interval-seconds: 30  # 隔多久从服务中心拉取一次服务列表，默认 30s
+  instance:
+    # 使用 IP 注册，否则会使用主机注册（此处考虑老版本的兼容，新版本经过实验都是 IP）
+    prefer-ip-address: true
+    # 自定义实例显示格式，加上版本号便于多版本管理，注意是 ip-address，早期版本是 ipaddress
+    instance-id: ${spring.cloud.client.ip-address}:${spring.application.name}:${server.port}:@project.version@
+    # 自定义元数据（key/value 结构）
+    metadata-map:
+      cluster: cll
+      region: rnl
+    lease-renewal-interval-in-seconds: 30  # 租约续约间隔时间，默认 30s
+    lease-expiration-duration-in-seconds: 90  # 租约到期，服务时效时间，默认值 90s，服务超过 90s 没有发⽣⼼跳，EurekaServer 会将服务从列表移除
+    
+server:
+  port: 8002
+
+spring:
+  application:
+    name: albrus-cloud-payment-service
+
+eureka:
+  client:
+    register-with-eureka: true  # 将自己注册到 EurekaServer
+    fetch-registry: true  # 是否从 EurekaServer 抓取已有的注册信息，默认为 true。单节点无所谓，集群必须设置为 true 才能配合 ribbon 使用负载均衡
+    service-url:
+      # defaultZone: http://localhost:7001/eureka/  # 路径包含 /eureka 是因为 EurekaServer 内部有 web 过滤器
+      defaultZone: http://eureka7001.com:7001/eureka/, http://eureka7002.com:7002/eureka/  # 集群配置
+    registry-fetch-interval-seconds: 30  # 隔多久从服务中心拉取一次服务列表，默认 30s
+  instance:
+    # 使用 IP 注册，否则会使用主机注册（此处考虑老版本的兼容，新版本经过实验都是 IP）
+    prefer-ip-address: true
+    # 自定义实例显示格式，加上版本号便于多版本管理，注意是 ip-address，早期版本是 ipaddress
+    instance-id: ${spring.cloud.client.ip-address}:${spring.application.name}:${server.port}:@project.version@
+    # 自定义元数据（key/value 结构）
+    metadata-map:
+      cluster: cll
+      region: rnl
+    lease-renewal-interval-in-seconds: 30  # 租约续约间隔时间，默认 30s
+    lease-expiration-duration-in-seconds: 90  # 租约到期，服务时效时间，默认值 90s，服务超过 90s 没有发⽣⼼跳，EurekaServer 会将服务从列表移除
+```
+
+**Eureka Client Consumer 调用**
+
+`OrderController.java`:
+
+```java
+// private static final String BASE_URL = "http://127.0.0.1:8001";
+/**
+ * 通过在 eureka 上注册过的微服务名称调用
+ */
+private static final String BASE_URL = "http://ALBRUS-CLOUD-PAYMENT-SERVICE";
 ```
 
