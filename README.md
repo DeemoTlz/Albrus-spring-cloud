@@ -76,6 +76,16 @@ Table 1. Release train Spring Boot compatibility
 
 ## 二、微服务组件
 
+![image-20230811195613354](./images/image-20230811195613354.png)
+
+**停更前**：
+
+![image-20230811195509124](./images/image-20230811195509124.png)
+
+**新版本**：
+
+![image-20230811195758352](./images/image-20230811195758352.png)
+
 ### 2.1 Eureka
 
 服务注册中心，已停止更新。
@@ -499,3 +509,56 @@ private static final String BASE_URL = "http://ALBRUS-CLOUD-PAYMENT-SERVICE";
 
 // 2023-08-11 19:43:32.669  WARN 17336 --- [  restartedMain] iguration$LoadBalancerCaffeineWarnLogger : Spring Cloud LoadBalancer is currently working with the default cache. While this cache implementation is useful for development and tests, it's recommended to use Caffeine cache in production.You can switch to using Caffeine cache, by adding it and org.springframework.cache.caffeine.CaffeineCacheManager to the classpath.
 ```
+
+### 2.2 服务发现
+
+`@EnableDiscoveryClient`:
+
+```java
+@EnableEurekaClient
+@SpringBootApplication
+@EnableDiscoveryClient
+public class AlbrusCloudPayment8001Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(AlbrusCloudPayment8001Application.class, args);
+    }
+
+}
+```
+
+`private final DiscoveryClient discoveryClient;`:
+
+```java
+@Slf4j
+@RestController
+@RequestMapping("/payment")
+public class PaymentController {
+    private final DiscoveryClient discoveryClient;
+
+    @Value("${spring.application.name}")
+    private String applicationName;
+    
+    public PaymentController(DiscoveryClient discoveryClient) {
+        this.discoveryClient = discoveryClient;
+    }
+    
+    @GetMapping(value = "/discoveryClientInfo")
+    public Result<ServiceInstance> getDiscoveryClientInfo() {
+        log.info("The discovery client is: {}.", discoveryClient);
+
+        List<String> services = discoveryClient.getServices();
+        for (String service : services) {
+            log.info("The service is: {}.", service);
+        }
+
+        List<ServiceInstance> instances = discoveryClient.getInstances(applicationName);
+        for (ServiceInstance instance : instances) {
+            log.info("The service instance details: {}, {}, {}, {}.", instance.getInstanceId(), instance.getHost(), instance.getPort(), instance.getUri());
+        }
+
+        return new Result<>(200, instances.get(0));
+    }
+}
+```
+

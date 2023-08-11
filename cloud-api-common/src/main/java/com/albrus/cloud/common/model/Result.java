@@ -16,4 +16,9 @@ public class Result<T> {
         this.code = code;
         this.msg = msg;
     }
+
+    public Result(Integer code, T data) {
+        this.code = code;
+        this.data = data;
+    }
 }
