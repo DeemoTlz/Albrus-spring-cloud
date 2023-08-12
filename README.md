@@ -1101,3 +1101,175 @@ spring:
 | ZooKeeper | Java | CP   | 支持         | 客户端       | 已集成            |
 | Consul    | GO   | CP   | 支持         | HTTP/DNS     | 已集成            |
 
+### 2.4 Ribbon
+
+#### 2.4.1 简介
+
+[Ribbon](https://github.com/Netflix/ribbon/wiki/Getting-Started)，LB，负载均衡：
+
+将用户请求平摊分配到多个服务上，常见的负载均衡有软件 Nginx、LVS，硬件 F5 等。
+
+**集中式 LB**
+
+在服务的消费方和提供方之间使用独立的 LB 设施，由该设施将访问请求通过某种策略转发至服务的提供方。
+
+Nginx 是服务器负载均衡，客户端所有请求都会交给 Nginx，然后由 Nginx 实现转发请求。即负载均衡是由服务端实现的。
+
+**进程内 LB**
+
+将 LB 集成到消费方，消费方从服务注册中心获取服务列表，再通过某种策略选择一个服务进行访问。
+
+Ribbon 本地负载均衡，在调用微服务接口时候，会在注册中心上获取注册信息服务列表之后缓存到 JVM 本地，从而在本地实现 RPC 远程服务调用技术。
+
+**Ribbon 进入维护阶段，平替方案：Spring Cloud Loadbalancer。**
+
+**Project Status: On Maintenance**
+
+Ribbon comprises of multiple components some of which are used in production internally and some of which were replaced by non-OSS solutions over time. This is because Netflix started moving into a more componentized architecture for RPC with a focus on single-responsibility modules. So each Ribbon component gets a different level of attention at this moment.
+
+More specifically, here are the components of Ribbon and their level of attention by our teams:
+
+- ribbon-core: **deployed at scale in production**
+- ribbon-eureka: **deployed at scale in production**
+- ribbon-evcache: **not used**
+- ribbon-guice: **not used**
+- ribbon-httpclient: **we use everything not under com.netflix.http4.ssl. Instead, we use an internal solution developed by our cloud security team**
+- ribbon-loadbalancer: **deployed at scale in production**
+- ribbon-test: **this is just an internal integration test suite**
+- ribbon-transport: **not used**
+- ribbon: **not used**
+
+![image-20230812202211732](./images/image-20230812202211732.png)
+
+#### 2.4.2 版本 & 更替
+
+> https://www.6hu.cc/archives/108064.html
+>
+> https://bbs.huaweicloud.com/blogs/366271
+>
+> https://www.cnblogs.com/Epiphanyi/articles/17032745.html
+
+Spring Cloud `2021.0.8` 版本管理的 Eureka 版本对应是 `<spring-cloud-netflix.version>3.1.7</spring-cloud-netflix.version>`，其中 [`3.1.7` 版本](https://docs.spring.io/spring-cloud-netflix/docs/3.1.7/reference/html/#using-eureka-with-spring-cloud-loadbalancer)已经默认使用 Spring Cloud LoadBalancer 来代替 Ribbon 了。
+
+![image-20230812203944493](./images/image-20230812203944493.png)
+
+`Eureka 3.1.7` 集成 `Ribbon 2.2.10.RELEASE` 失败，总是提示 `No instances available for ALBRUS-CLOUD-PAYMENT-SERVICE`，Google、Baidu 都没有找到解决方案，只有 Nacos 集成 Ribbon 的教程，待后续学习到 Nacos 后再回过头来练习 Ribbon，这里先学习理论知识。
+
+#### 2.4.3 负载算法
+
+> https://cloud.tencent.com/developer/article/1601502
+
+![image-20230812214855095](./images/image-20230812214855095.png)
+
+- `ZoneAvoidanceRule` - 默认规则，复合判断服务所在区域的性能和可用性来选择服务
+- `AvailabilityFilteringRule` - 先过滤掉故障实例，再选择并发较小的实例
+- `BestAvailableRule` - 先过滤掉由于多次访问故障而处于断路器跳闸状态的服务，然后选择一个并发量最小的服务
+- `RetryRule` - 先按照 `RoundRobinRule` 策略获取服务，如果获取失败则在指定时间内进行重试
+- `RoundRobinRule` - 轮询
+- `WeightedResponseTimeRule` - 对 `RoundRobinRule` 的扩展实现，响应速度越快的实例选择权重越大
+- `RandomRule` - 随机
+
+**查查源码**
+
+`RoundRobinRule`:
+
+```java
+public Server choose(ILoadBalancer lb, Object key) {
+    if (lb == null) {
+        log.warn("no load balancer");
+        return null;
+    }
+
+    Server server = null;
+    int count = 0;
+    // 最多尝试 10 次获取
+    while (server == null && count++ < 10) {
+        List<Server> reachableServers = lb.getReachableServers();
+        List<Server> allServers = lb.getAllServers();
+        int upCount = reachableServers.size();
+        int serverCount = allServers.size();
+
+        // 先判断有没有服务（总的、可用的）
+        if ((upCount == 0) || (serverCount == 0)) {
+            log.warn("No up servers available from load balancer: " + lb);
+            return null;
+        }
+
+        // 传递总服务数进去
+        int nextServerIndex = incrementAndGetModulo(serverCount);
+        server = allServers.get(nextServerIndex);
+
+        // 大佬
+        if (server == null) {
+            /* Transient. */
+            Thread.yield();
+            continue;
+        }
+
+        // 服务可用
+        if (server.isAlive() && (server.isReadyToServe())) {
+            return (server);
+        }
+
+        // Next.
+        server = null;
+    }
+
+    // 最多尝试 10 次
+    if (count >= 10) {
+        log.warn("No available alive servers after 10 tries from load balancer: "
+                + lb);
+    }
+    return server;
+}
+
+// modulo 总服务数
+private int incrementAndGetModulo(int modulo) {
+    // 大佬高性能
+    for (;;) {
+        int current = nextServerCyclicCounter.get();
+        int next = (current + 1) % modulo;
+        if (nextServerCyclicCounter.compareAndSet(current, next))
+            return next;
+    }
+}
+```
+
+#### 2.4.4 自定义负载算法
+
+**自定义配置类不能放在 `@ComponentScan` 所扫描的当前包下以及子包下**：
+
+![image-20230812213910238](./images/image-20230812213910238.png)
+
+**自定义 Ribbon 配置**：
+
+![image-20230812220132917](./images/image-20230812220132917.png)
+
+`RibbonConfiguration.java`:
+
+```java
+@Configuration
+public class RibbonConfiguration {
+
+    @Bean
+    public IRule ribbonRule() {
+        return new RandomRule();
+    }
+}
+```
+
+`AlbrusCloudConsumerOrderRibbon80Application.java`:
+
+```java
+@EnableEurekaClient
+@SpringBootApplication
+@RibbonClient(name = "ALBRUS-CLOUD-PAYMENT-SERVICE", configuration = RibbonConfiguration.class)
+public class AlbrusCloudConsumerOrderRibbon80Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(AlbrusCloudConsumerOrderRibbon80Application.class, args);
+    }
+
+}
+```
+
