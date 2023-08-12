@@ -510,6 +510,23 @@ private static final String BASE_URL = "http://ALBRUS-CLOUD-PAYMENT-SERVICE";
 // 2023-08-11 19:43:32.669  WARN 17336 --- [  restartedMain] iguration$LoadBalancerCaffeineWarnLogger : Spring Cloud LoadBalancer is currently working with the default cache. While this cache implementation is useful for development and tests, it's recommended to use Caffeine cache in production.You can switch to using Caffeine cache, by adding it and org.springframework.cache.caffeine.CaffeineCacheManager to the classpath.
 ```
 
+#### 2.1.4 自我保护
+
+> 当 Eureka Client 由于网络分区故障发生（延时、卡顿、拥挤）与 Eureka Server 断开连接时，Eureka Server 不会立即从服务列表中清除该 Eureka Client 服务，增加可用性（AP）。
+
+Eureka Server 默认在 90s 没有收到 Eureka Client 的心跳时，会将 Eureka Client 服务剔除。若在 90s 内丢失了大量的服务实例心跳，这时 Eureka Server 会开启自我保护机制，不会剔除任何服务实例了。
+
+```yaml
+eureka:
+  server:
+    enable-self-preservation: true  # 默认开启
+    
+eureka:
+  client:
+    lease-renewal-interval-in-seconds: 30  # 租约续约间隔时间，默认 30s
+    lease-expiration-duration-in-seconds: 90  # 租约到期，服务时效时间，默认值 90s，服务超过 90s 没有发⽣⼼跳，EurekaServer 会将服务从列表移除
+```
+
 ### 2.2 服务发现
 
 `@EnableDiscoveryClient`:
