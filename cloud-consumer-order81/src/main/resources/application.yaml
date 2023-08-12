@@ -1,0 +1,9 @@
+server:
+  port: 81
+
+spring:
+  application:
+    name: albrus-cloud-order-service  # 服务别名
+  cloud:
+    zookeeper:
+      connect-string: 10.10.20.121:2181  # ZooKeeper

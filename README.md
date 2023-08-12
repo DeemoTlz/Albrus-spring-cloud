@@ -496,7 +496,7 @@ eureka:
     lease-expiration-duration-in-seconds: 90  # 租约到期，服务时效时间，默认值 90s，服务超过 90s 没有发⽣⼼跳，EurekaServer 会将服务从列表移除
 ```
 
-**Eureka Client Consumer 调用**
+**Eureka Client Consumer 服务调用**
 
 `OrderController.java`:
 
@@ -589,6 +589,8 @@ Eureka 1.x is a core part of Netflix's service discovery system and is still an 
 
 ### 2.2 ZooKeeper
 
+> ZooKeeper 是一个分布式协调工具，可以实现注册中心功能。
+
 #### 2.2.1 安装启动
 
 配置文件：[zoo.cfg](./Program/ZooKeeper/zoo.cfg)
@@ -625,7 +627,7 @@ sudo ufw allow 2181
 ./zkCli.sh
 ```
 
-#### 2.2.2 服务入驻
+#### 2.2.2 Provider 服务入驻
 
 `application.yaml`:
 
@@ -732,5 +734,65 @@ public class AlbrusCloudPayment8004Application {
 ```bash
 [zk: localhost:2181(CONNECTED) 15] ls /services/albrus-cloud-payment-service
 [a22f75cf-62ad-4a94-9d74-be193afc2849]
+```
+
+#### 2.2.5 Consumer 服务入驻
+
+`application.yaml`:
+
+```yaml
+server:
+  port: 81
+
+spring:
+  application:
+    name: albrus-cloud-order-service  # 服务别名
+  cloud:
+    zookeeper:
+      connect-string: 10.10.20.121:2181  # ZooKeeper
+```
+
+`@EnableDiscoveryClient`:
+
+```java
+@SpringBootApplication
+@EnableDiscoveryClient
+public class AlbrusCloudConsumerOrder81Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(AlbrusCloudConsumerOrder81Application.class, args);
+    }
+
+}
+```
+
+```bash
+[zk: localhost:2181(CONNECTED) 62] ls /services
+[albrus-cloud-order-service, albrus-cloud-payment-service]
+```
+
+**Consumer 服务调用**
+
+`OrderController.java`:
+
+```java
+// private static final String BASE_URL = "http://127.0.0.1:8001";
+/**
+ * 通过在 ZooKeeper 上注册过的微服务名称调用
+ */
+private static final String BASE_URL = "http://albrus-cloud-payment-service";
+```
+
+`@LoadBalanced`:
+
+```java
+/**
+ * 使用 @LoadBalanced 注解赋予 RestTemplate 负载均衡的能力
+ */
+@Bean
+@LoadBalanced
+public RestTemplate restTemplate() {
+    return new RestTemplate();
+}
 ```
 
