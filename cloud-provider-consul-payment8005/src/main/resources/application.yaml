@@ -54,9 +54,17 @@ spring:
     consul:  # Consul
       host: 10.10.20.121
       port: 8500
+      # 服务发现相关配置
       discovery:
-        ip-address: 10.10.20.115
-        service-name: ${spring.application.name}
+        register: true  # 是否需要注册
+        instance-id: ${spring.application.name}:${spring.cloud.client.ip-address}:${server.port}  # 注册实例 id（必须唯一）（应用名称+服务器IP+端口）
+        service-name: ${spring.application.name}  # 服务名称
+        port: ${server.port}  # 服务端口
+        prefer-ip-address: true  # 是否使用 ip 地址注册
+        ip-address: ${spring.cloud.client.ip-address}  # 服务请求 ip
+        health-check-interval: 10s  # 健康检查频率
+        health-check-critical-timeout: 30s  # 健康检查失败多长时间后，取消注册
+        health-check-path: /health  # 健康检查路径
         heartbeat:
           enabled: true
 

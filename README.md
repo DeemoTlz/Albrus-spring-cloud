@@ -893,8 +893,6 @@ consul leave
 
 #### 2.3.2 Provider 服务入驻
 
-#### 2.2.2 Provider 服务入驻
-
 `application.yaml`:
 
 ```yaml
@@ -908,9 +906,17 @@ spring:
     consul:  # Consul
       host: 10.10.20.121
       port: 8500
+      # 服务发现相关配置
       discovery:
-        ip-address: 10.10.20.115
-        service-name: ${spring.application.name}
+        register: true  # 是否需要注册
+        instance-id: ${spring.application.name}:${spring.cloud.client.ip-address}:${server.port}  # 注册实例 id（必须唯一）（应用名称+服务器IP+端口）
+        service-name: ${spring.application.name}  # 服务名称
+        port: ${server.port}  # 服务端口
+        prefer-ip-address: true  # 是否使用 ip 地址注册
+        ip-address: ${spring.cloud.client.ip-address}  # 服务请求 ip
+        health-check-interval: 10s  # 健康检查频率
+        health-check-critical-timeout: 30s  # 健康检查失败多长时间后，取消注册
+        health-check-path: /health  # 健康检查路径
         heartbeat:
           enabled: true
 ```
@@ -924,6 +930,22 @@ public class AlbrusCloudPayment8005Application {
 
     public static void main(String[] args) {
         SpringApplication.run(AlbrusCloudPayment8004Application.class, args);
+    }
+
+}
+```
+
+`ConsulHealthController.java`（心跳检查接口）:
+
+```java
+@Slf4j
+@RestController
+public class ConsulHealthController {
+
+    @GetMapping("/health")
+    public String Health() {
+        log.info("consul health check.");
+        return "OK";
     }
 
 }
@@ -990,8 +1012,92 @@ public RestTemplate restTemplate() {
 }
 ```
 
-### 2.3 Consul
+#### 2.3.4 配置中心
 
-#### 2.3. ZooKeeper VS Consul
+`pom.xml`:
+
+```xml
+<!-- consul-config -->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-consul-config</artifactId>
+</dependency>
+```
+
+`application.yaml`:
+
+```yaml
+spring:
+  application:
+    name: order-service # 应用名称
+  profiles:
+    active: dev # 指定环境，默认加载 default 环境
+  cloud:
+    consul:
+      # Consul 服务器地址
+      host: localhost
+      port: 8500
+      # 配置中心相关配置
+      config:
+        # 是否启用配置中心，默认值 true 开启
+        enabled: true
+        # 设置配置的基本文件夹，默认值 config 可以理解为配置文件所在的最外层文件夹
+        prefix: config
+        # 设置应用的文件夹名称，默认值 application 一般建议设置为微服务应用名称
+        default-context: orderService
+        # 配置环境分隔符，默认值 "," 和 default-context 配置项搭配
+        # 例如应用 orderService 分别有环境 default、dev、test、prod
+        # 只需在 config 文件夹下创建 orderService、orderService-dev、orderService-test、orderService-prod 文件夹即可
+        profile-separator: '-'
+        # 指定配置格式为 yaml
+        format: YAML
+        # Consul 的 Key/Values 中的 Key，Value 对应整个配置文件
+        data-key: orderServiceConfig
+        # 以上配置可以理解为：加载 config/orderService/ 文件夹下 Key 为 orderServiceConfig 的 Value 对应的配置信息
+        watch:
+          # 是否开启自动刷新，默认值 true 开启
+          enabled: true
+          # 刷新频率，单位：毫秒，默认值 1000
+          delay: 1000
+```
+
+#### 2.3.5 Eureka VS ZooKeeper VS Consul
+
+##### 2.3.5.1 CAP 理论
+
+> CAP:
+>
+> - C: Consistency（强一致性）
+> - A: Availability（可用性）
+> - P: Partition tolerance（分区容错性）
+>
+> CAP 理论关注粒度是**数据**，而不是整体系统设计的策略。
+
+![image-20230812143000996](./images/image-20230812143000996.png)
+
+**AP 架构**：
+
+当网络分区出现以后，为了保证可用性，系统 B 可以**返回脏/旧值**，保证系统的可用性。
+
+违背了一致性 C 的要求，只能满足可用性和分区容错性，即 AP。
+
+![image-20230812143532052](./images/image-20230812143532052.png)
+
+**CP 架构**：
+
+当网络分区出现后，为了保证一致性，就必须**拒接请求**，否则无法保证一致性。
+
+违背了可用性 A 的要求，只满足一致性和分区容错性，即 CP。
+
+![image-20230812143542684](./images/image-20230812143542684.png)
+
+##### 2.3.5.2 三注册中心对比
 
 ![img](./images/2231162-20201204163044945-20375914.png)
+
+| 组件      | 语言 | CAP  | 服务健康检查 | 对外暴露接口 | Spring Cloud 集成 |
+| --------- | ---- | ---- | ------------ | ------------ | ----------------- |
+| Eureka    | Java | AP   | 可配置支持   | HTTP         | 已集成            |
+| ZooKeeper | Java | CP   | 支持         | 客户端       | 已集成            |
+| Consul    | GO   | CP   | 支持         | HTTP/DNS     | 已集成            |
+
