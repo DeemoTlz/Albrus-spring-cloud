@@ -510,24 +510,7 @@ private static final String BASE_URL = "http://ALBRUS-CLOUD-PAYMENT-SERVICE";
 // 2023-08-11 19:43:32.669  WARN 17336 --- [  restartedMain] iguration$LoadBalancerCaffeineWarnLogger : Spring Cloud LoadBalancer is currently working with the default cache. While this cache implementation is useful for development and tests, it's recommended to use Caffeine cache in production.You can switch to using Caffeine cache, by adding it and org.springframework.cache.caffeine.CaffeineCacheManager to the classpath.
 ```
 
-#### 2.1.4 自我保护
-
-> 当 Eureka Client 由于网络分区故障发生（延时、卡顿、拥挤）与 Eureka Server 断开连接时，Eureka Server 不会立即从服务列表中清除该 Eureka Client 服务，增加可用性（AP）。
-
-Eureka Server 默认在 90s 没有收到 Eureka Client 的心跳时，会将 Eureka Client 服务剔除。若在 90s 内丢失了大量的服务实例心跳，这时 Eureka Server 会开启自我保护机制，不会剔除任何服务实例了。
-
-```yaml
-eureka:
-  server:
-    enable-self-preservation: true  # 默认开启
-    
-eureka:
-  client:
-    lease-renewal-interval-in-seconds: 30  # 租约续约间隔时间，默认 30s
-    lease-expiration-duration-in-seconds: 90  # 租约到期，服务时效时间，默认值 90s，服务超过 90s 没有发⽣⼼跳，EurekaServer 会将服务从列表移除
-```
-
-### 2.2 服务发现
+##### 2.1.3.3 服务发现
 
 `@EnableDiscoveryClient`:
 
@@ -577,5 +560,177 @@ public class PaymentController {
         return new Result<>(200, instances.get(0));
     }
 }
+```
+
+#### 2.1.4 自我保护
+
+> 当 Eureka Client 由于网络分区故障发生（延时、卡顿、拥挤）与 Eureka Server 断开连接时，Eureka Server 不会立即从服务列表中清除该 Eureka Client 服务，增加可用性（AP）。
+
+Eureka Server 默认在 90s 没有收到 Eureka Client 的心跳时，会将 Eureka Client 服务剔除。若在 90s 内丢失了大量的服务实例心跳，这时 Eureka Server 会开启自我保护机制，不会剔除任何服务实例了。
+
+```yaml
+eureka:
+  server:
+    enable-self-preservation: true  # 默认开启
+    
+eureka:
+  client:
+    lease-renewal-interval-in-seconds: 30  # 租约续约间隔时间，默认 30s
+    lease-expiration-duration-in-seconds: 90  # 租约到期，服务时效时间，默认值 90s，服务超过 90s 没有发⽣⼼跳，EurekaServer 会将服务从列表移除
+```
+
+#### 2.1.5 停更
+
+[Eureka 2.0 (Discontinued)](https://github.com/Netflix/eureka/wiki)
+
+The existing open source work on eureka 2.0 is discontinued. The code base and artifacts that were released as part of the existing repository of work on the 2.x branch is considered use at your own risk.
+
+Eureka 1.x is a core part of Netflix's service discovery system and is still an active project.
+
+### 2.2 ZooKeeper
+
+#### 2.2.1 安装启动
+
+配置文件：[zoo.cfg](./Program/ZooKeeper/zoo.cfg)
+
+```properties
+# The number of milliseconds of each tick
+# 心跳时间，为了确保client-server连接存在，以毫秒为单位，最小超时时间为2个心跳时间
+tickTime=2000
+# The number of ticks that the initial 
+# synchronization phase can take
+# 多少个tickTime内，允许其他server连接并初始化数据，如果zookeeper管理的数据较大，则相应增大这个值
+initLimit=10
+# The number of ticks that can pass between 
+# sending a request and getting an acknowledgement
+# 多少个tickTime内，允许follower同步，如果follower落后太多，则会被丢弃
+syncLimit=5
+# the directory where the snapshot is stored.
+# do not use /tmp for storage, /tmp here is just 
+# example sakes.
+# 用户存放内存数据库快照的文件夹，同时用于集群myid文件也存在这个文件夹里
+dataDir=/home/albrus/apache-zookeeper-3.6.4-bin/data
+# the port at which the clients will connect
+# 客户端监听端口
+clientPort=2181
+```
+
+安装启动：
+
+```bash
+tar -zxvf apache-zookeeper-3.6.4-bin.tar.gz
+cp zoo.cfg ./conf
+sudo ufw allow 2181
+./zkServer.sh start
+./zkCli.sh
+```
+
+#### 2.2.2 服务入驻
+
+`application.yaml`:
+
+```yaml
+server:
+  port: 8004
+
+spring:
+  application:
+    name: albrus-cloud-payment-service  # 服务别名
+  cloud:
+    zookeeper:
+      connect-string: 10.10.20.121:2181  # ZooKeeper
+```
+
+`@EnableDiscoveryClient`:
+
+```java
+@SpringBootApplication
+@EnableDiscoveryClient
+public class AlbrusCloudPayment8004Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(AlbrusCloudPayment8004Application.class, args);
+    }
+
+}
+```
+
+```bash
+[zk: localhost:2181(CONNECTED) 2] ls /
+[services, zookeeper]
+[zk: localhost:2181(CONNECTED) 3] ls /services 
+[albrus-cloud-payment-service]
+```
+
+#### 2.2.3 测试验证
+
+`http://127.0.0.1:8004/payment/31`:
+
+```json
+{"code":200,"msg":"查询成功","data":{"id":31,"serial":"尚硅谷111"}}
+```
+
+`ZooKeeper`:
+
+```bash
+[zk: localhost:2181(CONNECTED) 13] ls /services/albrus-cloud-payment-service 
+[21cfe505-2441-41d6-bc04-21c0ef7a574d]
+[zk: localhost:2181(CONNECTED) 14] get /services/albrus-cloud-payment-service/21cfe505-2441-41d6-bc04-21c0ef7a574d 
+{
+	"name": "albrus-cloud-payment-service",
+	"id": "21cfe505-2441-41d6-bc04-21c0ef7a574d",
+	"address": "localhost",
+	"port": 8004,
+	"sslPort": null,
+	"payload": {
+		"@class": "org.springframework.cloud.zookeeper.discovery.ZookeeperInstance",
+		"id": "albrus-cloud-payment-service",
+		"name": "albrus-cloud-payment-service",
+		"metadata": {
+			"instance_status": "UP"
+		}
+	},
+	"registrationTimeUTC": 1691805864932,
+	"serviceType": "DYNAMIC",
+	"uriSpec": {
+		"parts": [{
+			"value": "scheme",
+			"variable": true
+		}, {
+			"value": "://",
+			"variable": false
+		}, {
+			"value": "address",
+			"variable": true
+		}, {
+			"value": ":",
+			"variable": false
+		}, {
+			"value": "port",
+			"variable": true
+		}]
+	}
+}
+```
+
+#### 2.2.4 临时节点 && 持久节点
+
+> 临时节点
+>
+> 带序号的临时节点
+>
+> 持久节点
+>
+> 带序号的持久节点
+
+是临时节点，在服务断连的一段时间后，ZooKeeper 会剔除断连的服务（CP）。
+
+在服务重新启动后，服务将以一个新节点身份重新上线。
+
+**重启 8004**:
+
+```bash
+[zk: localhost:2181(CONNECTED) 15] ls /services/albrus-cloud-payment-service
+[a22f75cf-62ad-4a94-9d74-be193afc2849]
 ```
 

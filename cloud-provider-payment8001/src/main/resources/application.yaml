@@ -3,7 +3,7 @@ server:
 
 spring:
   application:
-    name: albrus-cloud-payment-service
+    name: albrus-cloud-payment-service  # 服务别名
   datasource:
     url: jdbc:mysql://10.10.20.121:3306/albrus_cloud?useUnicode=true&characterEncoding=UTF-8&useSSL=false
     username: root
