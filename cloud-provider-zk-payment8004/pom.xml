@@ -9,7 +9,7 @@
         <version>0.0.1</version>
     </parent>
 
-    <artifactId>cloud-provider-payment8002</artifactId>
+    <artifactId>cloud-provider-zk-payment8004</artifactId>
 
     <dependencies>
         <dependency>
@@ -20,14 +20,14 @@
 
         <dependency>
             <groupId>com.albrus</groupId>
-            <artifactId>cloud-provider-payment8080-api</artifactId>
+            <artifactId>cloud-provider-payment-api</artifactId>
             <version>${project.version}</version>
         </dependency>
 
-        <!-- eureka-client -->
+        <!-- zookeeper-discovery -->
         <dependency>
             <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+            <artifactId>spring-cloud-starter-zookeeper-discovery</artifactId>
         </dependency>
 
         <!-- 排除 Spring Boot 默认的 logback -->

@@ -20,7 +20,7 @@
 
         <dependency>
             <groupId>com.albrus</groupId>
-            <artifactId>cloud-provider-payment8080-api</artifactId>
+            <artifactId>cloud-provider-payment-api</artifactId>
             <version>${project.version}</version>
         </dependency>
 
