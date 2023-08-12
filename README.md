@@ -725,7 +725,7 @@ public class AlbrusCloudPayment8004Application {
 >
 > 带序号的持久节点
 
-是临时节点，在服务断连的一段时间后，ZooKeeper 会剔除断连的服务（CP）。
+是临时节点，在**服务断连的一段时间**后，ZooKeeper 会剔除断连的服务（CP）。
 
 在服务重新启动后，服务将以一个新节点身份重新上线。
 
@@ -796,3 +796,202 @@ public RestTemplate restTemplate() {
 }
 ```
 
+### 2.3 Consul
+
+> https://developer.hashicorp.com/consul
+>
+> https://www.springcloud.cc/spring-cloud-consul.html
+
+**What is Consul?**
+
+HashiCorp Consul is a service networking solution that enables teams to manage secure network connectivity between services and across on-prem and multi-cloud environments and runtimes. Consul offers **service discovery**, **service mesh**, **traffic management**, and **automated updates to network infrastructure device**. You can use these features individually or together in a single Consul deployment.
+
+HashiCorp Consul 是一种服务网络解决方案，使团队能够管理服务之间以及跨本地和多云环境和运行时的安全网络连接。Consul 提供**服务发现**、**服务网格**、**流量管理**和**网络基础设施设备的自动更新**。您可以在单个 Consul 部署中单独或一起使用这些功能。
+
+**What is service discovery?**
+
+*Service discovery* helps you discover, track, and monitor the health of services within a network. Service discovery registers and maintains a record of all your services in a *service catalog*. This service catalog acts as a single source of truth that allows your services to query and communicate with each other.
+
+*服务发现*可帮助您**发现**、**跟踪**和**监控**网络内服务的运行状况。*服务发现在服务目录*中注册并维护所有服务的记录。该服务目录充当单一事实来源，允许您的服务相互查询和通信。
+
+**Benefits of service discovery**
+
+Service discovery provides benefits for all organizations, ranging from simplified scalability to improved application resiliency. Some of the benefits of service discovery include:
+
+- Dynamic IP address and port discovery - 动态 IP 和端口发现
+- Simplified horizontal service scaling - 简化水平服务扩展
+- Abstracts discovery logic away from applications - 将发现逻辑从应用程序中抽象出来
+- Reliable service communication ensured by health checks - 健康检查确保可靠的服务通信
+- Load balances requests across healthy service instances - 在健康的服务实例之间负载平衡请求
+- Faster deployment times achieved by high-speed discovery - 通过高速发现实现更快的部署时间
+- Automated service registration and de-registration - 自动服务注册和注销
+
+**What is a service mesh?**
+
+A *service mesh* is a dedicated network layer that provides secure service-to-service communication within and across infrastructure, including on-premises and cloud environments. Service meshes are often used with a microservice architectural pattern, but can provide value in any scenario where complex networking is involved.
+
+服务*网格*是一个专用网络层，可在基础设施内部和跨基础设施（包括本地和云环境）提供安全的服务到服务通信。服务网格通常与微服务架构模式一起使用，但可以在涉及复杂网络的任何场景中提供价值。
+
+**Benefits of a service mesh**
+
+A service mesh provides benefits for all organizations, ranging from security to improved application resiliency. Some of the benefits of a service mesh include;
+
+- service discovery - 服务发现
+- application health monitoring - 应用程序健康监控
+- load balancing - 负载均衡
+- automatic failover - 自动故障转移
+- traffic management - 流量管理
+- encryption - 加密
+- observability and traceability - 可观察性和可追溯性
+- authentication and authorization - 认证和授权
+- network automation - 网格自动化
+
+#### 2.3.1 安装运行
+
+```bash
+wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+sudo apt update && sudo apt install consul
+```
+
+**运行（8500）**：
+
+```bash
+# 快捷模式
+consul agent -dev -client 0.0.0.0
+
+# Sever 模式
+consul agent -server -bootstrap-expect 1 -data-dir /tmp/consul -ui -config-dir /etc/consul.d -bind=192.168.1.100
+
+配置参数说明
+-server：- Serve 模式（不配置为 Client 模式），数量一般为 3-5 个
+-bootstrap-expect： - Server 数量
+-data-dir： - 数据目录
+-ui-dir： - UI目录
+-node： - Node名称
+-bind： - 集群通讯地址
+Server 模式后台访问地址：http://localhost:8500
+ctrl + c：停止服务
+
+#Client 模式
+consul agent -data-dir /tmp/consul -node=ubuntu64 -bind=10.9.10.176
+
+#查看集群
+consul members
+
+#查看当前服务器状况
+consul info
+
+#退出服务器集群
+consul leave
+```
+
+[配置项](https://developer.hashicorp.com/consul/docs/agent/config)（[引用中文翻译](https://www.cnblogs.com/duanxz/p/9908762.html)）：
+
+- [`-client`](https://www.consul.io/docs/agent/options.html#_client) - Consul将绑定客户端接口的地址，包括HTTP和DNS服务器。默认情况下，这是“127.0.0.1”，只允许回送连接。在Consul 1.0和更高版本中，可以将其设置为要绑定到的空间分隔的地址列表，或者 可能会解析为多个地址的 [go-sockaddr](https://godoc.org/github.com/hashicorp/go-sockaddr/template)模板。
+- [`-bind`](https://www.consul.io/docs/agent/options.html#_bind) - 应为内部集群通信绑定的地址。这是集群中所有其他节点都应该可以访问的IP地址。默认情况下，这是“0.0.0.0”，这意味着Consul将绑定到本地计算机上的所有地址，并将第一个可用的私有IPv4地址[通告](https://www.consul.io/docs/agent/options.html#_advertise)给群集的其余部分。如果有多个私有IPv4地址可用，Consul将在启动时退出并出现错误。如果你指定“[::]”，Consul 将 [做广告](https://www.consul.io/docs/agent/options.html#_advertise)第一个可用的公共IPv6地址。如果有多个公共IPv6地址可用，则Consul将在启动时退出并出现错误。Consul同时使用TCP和UDP以及相同的端口。如果您有任何防火墙，请确保同时允许这两种协议。在Consul 1.0和更高版本中，可以将其设置为要绑定到的空间分隔的地址列表，或者可能会解析为多个地址的 [go-sockaddr](https://godoc.org/github.com/hashicorp/go-sockaddr/template)模板。
+
+#### 2.3.2 Provider 服务入驻
+
+#### 2.2.2 Provider 服务入驻
+
+`application.yaml`:
+
+```yaml
+server:
+  port: 8005
+
+spring:
+  application:
+    name: albrus-cloud-payment-service  # 服务别名
+  cloud:
+    consul:  # Consul
+      host: 10.10.20.121
+      port: 8500
+      discovery:
+        ip-address: 10.10.20.115
+        service-name: ${spring.application.name}
+        heartbeat:
+          enabled: true
+```
+
+`@EnableDiscoveryClient`:
+
+```java
+@SpringBootApplication
+@EnableDiscoveryClient
+public class AlbrusCloudPayment8005Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(AlbrusCloudPayment8004Application.class, args);
+    }
+
+}
+```
+
+#### 2.3.3 Consumer 服务入驻
+
+`application.yaml`:
+
+```yaml
+server:
+  port: 82
+
+spring:
+  application:
+    name: albrus-cloud-order-service  # 服务别名
+  cloud:
+    consul:  # Consul
+      host: 10.10.20.121
+      port: 8500
+      discovery:
+        ip-address: 10.10.20.115
+        service-name: ${spring.application.name}
+        heartbeat:
+          enabled: true
+```
+
+`@EnableDiscoveryClient`:
+
+```java
+@SpringBootApplication
+@EnableDiscoveryClient
+public class AlbrusCloudConsumerOrder82Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(AlbrusCloudConsumerOrder82Application.class, args);
+    }
+
+}
+```
+
+**Consumer 服务调用**
+
+`OrderController.java`:
+
+```java
+// private static final String BASE_URL = "http://127.0.0.1:8001";
+/**
+ * 通过在 Consul 上注册过的微服务名称调用
+ */
+private static final String BASE_URL = "http://albrus-cloud-payment-service";
+```
+
+`@LoadBalanced`:
+
+```java
+/**
+ * 使用 @LoadBalanced 注解赋予 RestTemplate 负载均衡的能力
+ */
+@Bean
+@LoadBalanced
+public RestTemplate restTemplate() {
+    return new RestTemplate();
+}
+```
+
+### 2.3 Consul
+
+#### 2.3. ZooKeeper VS Consul
+
+![img](./images/2231162-20201204163044945-20375914.png)

@@ -1,0 +1,64 @@
+server:
+  port: 8006
+
+spring:
+  application:
+    name: albrus-cloud-payment-service  # 服务别名
+  datasource:
+    url: jdbc:mysql://10.10.20.121:3306/albrus_cloud?useUnicode=true&characterEncoding=UTF-8&useSSL=false
+    username: root
+    password: 12345678
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    type: com.alibaba.druid.pool.DruidDataSource
+
+    druid:  # https://github.com/alibaba/druid/wiki/DruidDataSource%E9%85%8D%E7%BD%AE%E5%B1%9E%E6%80%A7%E5%88%97%E8%A1%A8
+      aop-patterns: com.albrus.*  # 监控 Spring Bean
+      filters: stat,wall,slf4j  # 底层开启功能，stat（sql监控），wall（防火墙），log4j（日志记录）
+
+      #初始化连接池的连接数量 大小，最小，最大
+      initial-size: 5  #初 始化连接大小
+      min-idle: 5  # 最小连接池数量
+      max-active: 20  # 最大连接池数量，已经不再使用，配置了也没效果
+      max-wait: 60000  # 配置获取连接等待超时的时间，单位毫秒。配置了 maxWait 之后，缺省启用公平锁，并发效率会有所下降，如果需要可以通过配置 useUnfairLock 属性为 true 使用非公平锁。
+
+      time-between-eviction-runs-millis: 60000  #配置间隔多久才进行一次检测，检测需要关闭的空闲连接，单位是毫秒
+      min-evictable-idle-time-millis: 30000  # 配置一个连接在池中最小生存的时间，单位是毫秒
+      validation-query: SELECT 1 FROM DUAL  # 测试连接，如果 validationQuery 为 null，testOnBorrow、testOnReturn、testWhileIdle 都不会起作用。
+      test-while-idle: true  # 建议配置为 true，不影响性能，并且保证安全性。申请连接的时候检测，如果空闲时间大于 timeBetweenEvictionRunsMillis，执行 validationQuery 检测连接是否有效。
+      test-on-borrow: true  # 申请连接时执行 validationQuery 检测连接是否有效，做了这个配置会降低性能
+      test-on-return: false  # 归还连接时执行validationQuery检测连接是否有效，做了这个配置会降低性能。
+      pool-prepared-statements: false  #是否开启 PSCache，PSCache 对支持游标的数据库性能提升巨大，Oracle 建议开启，MySQL 下建议关闭
+      max-pool-prepared-statement-per-connection-size: -1 # 要启用 PSCache，必须配置大于 0，当大于 0 时，poolPreparedStatements 自动触发修改为 true。在 Druid 中，不会存在 Oracle 下 PSCache 占用内存过多的问题，可以把这个数值配置大一些，比如说 100
+
+      stat-view-servlet:   # 配置监控页功能
+        enabled: true
+        login-username: admin
+        login-password: admin
+        resetEnable: false
+
+      web-stat-filter:  # 监控web
+        enabled: true
+        urlPattern: /*
+        exclusions: '*.js,*.gif,*.jpg,*.png,*.css,*.ico,/druid/*'
+
+      filter:
+        stat:  # 对上面 filters 里面的 stat 的详细配置
+          slow-sql-millis: 1000
+          logSlowSql: true
+          enabled: true
+        wall:
+          enabled: true
+          config:
+            drop-table-allow: false
+  cloud:
+    consul:  # Consul
+      host: 10.10.20.121
+      port: 8500
+      discovery:
+        ip-address: 10.10.20.115
+        service-name: ${spring.application.name}
+        heartbeat:
+          enabled: true
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml

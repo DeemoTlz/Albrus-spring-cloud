@@ -1,0 +1,15 @@
+server:
+  port: 82
+
+spring:
+  application:
+    name: albrus-cloud-order-service  # 服务别名
+  cloud:
+    consul:  # Consul
+      host: 10.10.20.121
+      port: 8500
+      discovery:
+        ip-address: 10.10.20.115
+        service-name: ${spring.application.name}
+        heartbeat:
+          enabled: true
