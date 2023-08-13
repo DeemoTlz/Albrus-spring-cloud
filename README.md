@@ -1273,3 +1273,140 @@ public class AlbrusCloudConsumerOrderRibbon80Application {
 }
 ```
 
+### 2.5 OpenFeign
+
+> https://spring.io/projects/spring-cloud-openfeign
+>
+> https://docs.spring.io/spring-cloud-openfeign/docs/3.1.8/reference/html/
+
+#### 2.5.1 简介
+
+This project provides OpenFeign integrations for Spring Boot apps through autoconfiguration and binding to the Spring Environment and other Spring programming model idioms.
+
+该项目通过自动配置和绑定到 Spring 环境和其他 Spring 编程模型习惯用法，为 Spring Boot 应用程序提供 OpenFeign 集成。
+
+**Declarative REST Client: Feign**
+
+**声明式 REST 客户端：Feign**
+
+[Feign](https://github.com/OpenFeign/feign) is a declarative web service client. It makes writing web service clients easier. **To use Feign create an interface and annotate it.** It has pluggable annotation support including Feign annotations and JAX-RS annotations. Feign also supports pluggable encoders and decoders. Spring Cloud adds support for Spring MVC annotations and for using the same `HttpMessageConverters` used by default in Spring Web. Spring Cloud integrates Eureka, Spring Cloud CircuitBreaker, as well as Spring Cloud LoadBalancer to provide a load-balanced http client when using Feign.
+
+[Feign](https://github.com/OpenFeign/feign) 是一个声明式 Web 服务客户端。它使编写 Web 服务客户端变得更加容易。**要使用 Feign 创建一个接口并对其进行注释。**它具有可插入的注释支持，包括 Feign 注释和 JAX-RS 注释。Feign 还支持可插入的编码器和解码器。Spring Cloud 添加了对 Spring MVC 注释以及使用`HttpMessageConverters`Spring Web 中默认使用的注释的支持。Spring Cloud集成了 Eureka、Spring Cloud CircuitBreaker 以及 Spring Cloud LoadBalancer，在使用 Feign 时提供负载均衡的 HTTP 客户端。
+
+**为什么要用？**
+
+Ribbon + RestTemplate? 需要关注 URI、方法调用不明确、返回值需要转换...
+
+面向接口编程，Feign 能够使远程方法调用像调用本地方法一样简单！
+
+#### 2.5.2 Feign VS OpenFeign
+
+| Feign                                                        | OpenFeign                                                    |
+| ------------------------------------------------------------ | ------------------------------------------------------------ |
+| Feign 是 Spring Cloud 组件中的一个轻量级 RESTful 的 HTTP 服务客户端。 | OpenFeign 是 Spring Cloud 在 Feign 的基础上支持了 SpringMVC 的注解，如 @RequesMapping 等等。 |
+| Feign 内置了 Ribbon，用来做客户端负载均衡，去调用服务注册中心的服务。Feign 的使用方式是：使用 Feign 的注解定义接口，调用这个接口，就可以调用服务注册中心的服务。 | OpenFeign 的 @FeignClient 可以解析 SpringMVC 的 @RequestMapping 注解下的接口，并通过动态代理的方式产生实现类，实现类中做负载均衡并调用其他服务。 |
+| `<dependency>`<br/>`<groupId>org.springframework.cloud</groupId>`<br/>`<artifactId>spring-cloud-starter-feign</artifactId>`<br/>`</dependency>` | `<dependency>`<br/>`<groupId>org.springframework.cloud</groupId>`<br/>`<artifactId>spring-cloud-starter-openfeign</artifactId>`<br/>`</dependency>` |
+
+#### 2.5.3 使用 Feign
+
+`AlbrusCloudConsumerFeignOrder80Application.java`:
+
+```java
+@SpringBootApplication
+@EnableEurekaClient
+@EnableFeignClients
+public class AlbrusCloudConsumerFeignOrder80Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(AlbrusCloudConsumerFeignOrder80Application.class, args);
+    }
+
+}
+```
+
+`PaymentFeignService.java`:
+
+```java
+@Component
+@FeignClient(value = "ALBRUS-CLOUD-PAYMENT-SERVICE", path = "/payment")
+public interface PaymentFeignService {
+
+    @GetMapping(value = "/{id}")
+    Result<PaymentVO> getPaymentById(@PathVariable("id") Long id);
+
+    @GetMapping(value = "/discoveryClientInfo")
+    Result<ServiceInstance> getDiscoveryClientInfo();
+
+    @PostMapping
+    Result<Integer> create(@RequestBody PaymentVOParams paymentVOParams);
+
+}
+```
+
+`OrderController.java`:
+
+```java
+@Slf4j
+@RestController
+@RequestMapping("/consumer/order")
+public class OrderController {
+
+    private final PaymentFeignService paymentFeignService;
+
+    public OrderController(PaymentFeignService paymentFeignService) {
+        this.paymentFeignService = paymentFeignService;
+    }
+
+    @GetMapping(value = "/{id}")
+    public Result<PaymentVO> getPaymentById(@PathVariable("id") Long id) {
+        // http://127.0.0.1:80/consumer/order/31
+        return paymentFeignService.getPaymentById(id);
+    }
+
+    @PostMapping
+    public Result<Integer> create(@RequestBody PaymentVOParams paymentVOParams) {
+        // log.info("The result of save payment: [{}] is [{}].", paymentVOParams.getSerial(), result);
+        return paymentFeignService.create(paymentVOParams);
+    }
+
+}
+```
+
+**可以看到，在 `Controller` 中无需再关心 URI、方法返回值转换，方法调用明确，就像调用本地方法一样简单。**
+
+#### 2.5.3 超时 && 日志
+
+**超时时间**
+
+`application.yaml`:
+
+```yaml
+feign:
+  client:
+    config:
+      # ALBRUS-CLOUD-PAYMENT-SERVICE:
+      default:
+        connectTimeout: 4000  # 连接超时时间
+        readTimeout: 4000  # 读取（等待）数据时间
+        loggerLevel: basic
+```
+
+There was an unexpected error (type=Internal Server Error, status=500).
+
+Read timed out executing GET http://ALBRUS-CLOUD-PAYMENT-SERVICE/payment/longtime/31
+
+feign.RetryableException: Read timed out executing GET http://ALBRUS-CLOUD-PAYMENT-SERVICE/payment/longtime/31
+
+**日志级别**
+
+- `NONE`：默认的，不显示任何日志；
+- `BASIC`：仅记录请求方法、URL、响应状态码及执行时间；
+- `HEADERS`：除了 BASIC 中定义的信息之外，还有请求和响应的头信息；
+- `FULL`：除了 HEADERS 中定义的信息之外，还有请求和响应的正文及元数据。
+
+```xml
+<!-- Feign 调用日志 -->
+<AsyncLogger name="com.albrus.cloud.order.service.PaymentFeignService" level="DEBUG"/>
+```
+
+需要在日志框架配置中配置 Feign Service 的日志输出级别。

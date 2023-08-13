@@ -46,6 +46,24 @@ public class PaymentController {
         }
     }
 
+    @GetMapping(value = "/longtime/{id}")
+    public Result<PaymentVO> getPaymentByIdLongtime(@PathVariable("id") Long id) {
+        try {
+            Thread.sleep(3_000);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
+        PaymentBO payment = paymentService.getById(id);
+        log.info("The result of get payment by id: [{}] is [{}].", id, payment);
+
+        if (payment != null) {
+            return new Result<>(200, "查询成功", new PaymentVO(payment.getId(), payment.getSerial()));
+        } else {
+            return new Result<>(444, "没有对应记录,查询ID: " + id);
+        }
+    }
+
     @GetMapping(value = "/discoveryClientInfo")
     public Result<ServiceInstance> getDiscoveryClientInfo() {
         log.info("The discovery client is: {}.", discoveryClient);
