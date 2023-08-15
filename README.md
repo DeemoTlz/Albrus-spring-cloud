@@ -1153,6 +1153,18 @@ Spring Cloud `2021.0.8` 版本管理的 Eureka 版本对应是 `<spring-cloud-ne
 
 ![image-20230812203944493](./images/image-20230812203944493.png)
 
+```xml
+<properties>
+    <spring-cloud-netflix-ribbon.version>2.2.10.RELEASE</spring-cloud-netflix-ribbon.version>
+</properties>
+
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-netflix-ribbon</artifactId>
+    <version>${spring-cloud-netflix-ribbon.version}</version>
+</dependency>
+```
+
 `Eureka 3.1.7` 集成 `Ribbon 2.2.10.RELEASE` 失败，总是提示 `No instances available for ALBRUS-CLOUD-PAYMENT-SERVICE`，Google、Baidu 都没有找到解决方案，只有 Nacos 集成 Ribbon 的教程，待后续学习到 Nacos 后再回过头来练习 Ribbon，这里先学习理论知识。
 
 #### 2.4.3 负载算法
@@ -1563,6 +1575,148 @@ Hystrix 不再处于主动开发中，目前处于维护模式。
 - 次之，采用进程隔离，一个机器多个 Tomcat
 - 次之，请求隔离
 - **由于 Hystrix 框架所属的层级为代码层，所以实现的是请求隔离，线程池或信号量**
+
+#### 2.6.8 环境构建
+
+Spring Cloud `2021.0.8` 版本默认已经没有 `spring-cloud-starter-netflix-hystrix` 了，其中 `spring-cloud-alibaba-dependencies 2021.0.5.0` 默认使用 `sentinel 1.8.6` 来代替之。
+
+```xml
+<properties>
+    <spring-cloud-netflix-hystrix.version>2.2.10.RELEASE</spring-cloud-netflix-hystrix.version>
+</properties>
+
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-netflix-hystrix</artifactId>
+    <version>${spring-cloud-netflix-hystrix.version}</version>
+</dependency>
+```
+
+构建消费端和服务端环境结构简单、问题根因简单，这里不再赘述了。
+
+**模拟：增加接口响应时间（并发压力下，耗时操作消耗了大量线程资源，没有空闲线程支撑服务）**
+
+- 超时导致服务器变慢（转圈）
+
+  超时不再等待
+
+- 出错（宕机或程序运行出错）
+
+  出错要有兜底
+
+**如何解决？**
+
+- 对方服务（8001）超时，调用者（80）不能一直卡死等待，必须有**服务降级**
+- 对方服务（8001）down 机，调用者（80）不能一直卡死等待，必须有**服务降级**
+- 对方服务（8001）OK，调用者（80）出故障或有自我要求（自己的等待时间小于服务提供者），自己处理**服务降级**
+
+#### 2.6.9 `@HystrixCommand`
+
+##### 2.6.9.1 Provider
+
+`PaymentServiceImpl.java`:
+
+```java
+@HystrixCommand(fallbackMethod = "getByIdLongtimeFallHandler", commandProperties = {
+        @HystrixProperty(name="execution.isolation.thread.timeoutInMilliseconds", value="3000")
+})
+@Override
+public PaymentBO getByIdLongtime(Long id) {
+    // 模拟异常
+    // int age = 100 / 0;
+    // 或者是超长处理时间
+    try {
+        Thread.sleep(5_000);
+    } catch (InterruptedException e) {
+        throw new RuntimeException(e);
+    }
+
+    Payment payment = paymentDao.getById(id);
+    return new PaymentBO(payment.getId(), payment.getSerial());
+}
+
+/**
+ * 兜底方案
+ */
+private PaymentBO getByIdLongtimeFallHandler(Long id) {
+    log.warn("Thread: [{}]: failed to get payment by id: [{}].", Thread.currentThread().getName(), id);
+    return null;
+}
+```
+
+`AlbrusCloudHystrixPayment8001Application.java`:
+
+```java
+@SpringBootApplication
+@EnableEurekaClient
+@EnableDiscoveryClient
+// 开启服务降级 @Import(EnableCircuitBreakerImportSelector.class)
+@EnableCircuitBreaker
+public class AlbrusCloudHystrixPayment8001Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(AlbrusCloudHystrixPayment8001Application.class, args);
+    }
+
+}
+```
+
+##### 2.6.9.2 Consumer
+
+`application.xml`:
+
+```yaml
+feign:
+  client:
+    config:
+      # ALBRUS-CLOUD-PAYMENT-HYSTRIX-SERVICE:
+      default:
+        connectTimeout: 4000  # 连接超时时间
+        readTimeout: 4000  # 读取（等待）数据时间
+        loggerLevel: FULL
+  circuitbreaker:
+    enabled: true  # 开启服务降级
+```
+
+`AlbrusCloudConsumerFeignHystrixOrder80Application.java`:
+
+```java
+@SpringBootApplication
+@EnableEurekaClient
+@EnableFeignClients
+// 开启服务降级 @EnableCircuitBreaker
+@EnableHystrix
+public class AlbrusCloudConsumerFeignHystrixOrder80Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(AlbrusCloudConsumerFeignHystrixOrder80Application.class, args);
+    }
+
+}
+```
+
+`OrderController.java`:
+
+```java
+@GetMapping(value = "/longtime/{id}")
+@HystrixCommand(fallbackMethod = "getByIdLongtimeFallHandler", commandProperties = {
+        @HystrixProperty(name="execution.isolation.thread.timeoutInMilliseconds",value="1500")
+})
+public Result<PaymentVO> getPaymentByIdLongtime(@PathVariable("id") Long id) {
+    // http://127.0.0.1:80/consumer/order/longtime/31
+    return paymentFeignService.getPaymentByIdLongtime(id);
+}
+
+/**
+ * 兜底方案
+ */
+private Result<PaymentVO> getByIdLongtimeFallHandler(Long id) {
+    log.warn("Thread: [{}]: failed to get payment by id: [{}].", Thread.currentThread().getName(), id);
+    return new Result<>(404, "NOT FOUND");
+}
+```
+
+
 
 #### 2.6.x 小结
 

@@ -22,6 +22,7 @@
         <module>cloud-provider-payment-api</module>
         <module>cloud-provider-eureka-payment8001</module>
         <module>cloud-provider-eureka-payment8002</module>
+        <module>cloud-provider-eureka-hystrix-payment8001</module>
         <module>cloud-provider-zk-payment8003</module>
         <module>cloud-provider-zk-payment8004</module>
         <module>cloud-provider-consul-payment8005</module>
@@ -29,6 +30,7 @@
         <module>cloud-consumer-eureka-order80</module>
         <module>cloud-consumer-eureka-ribbon-order80</module>
         <module>cloud-consumer-eureka-feign-order80</module>
+        <module>cloud-consumer-eureka-feign-hystrix-order80</module>
         <module>cloud-consumer-zk-order81</module>
         <module>cloud-consumer-consul-order82</module>
         <module>cloud-eureka-server7001</module>
@@ -45,6 +47,7 @@
         <spring-cloud.version>2021.0.8</spring-cloud.version>
         <spring-cloud-alibaba.version>2021.0.5.0</spring-cloud-alibaba.version>
         <spring-cloud-netflix-ribbon.version>2.2.10.RELEASE</spring-cloud-netflix-ribbon.version>
+        <spring-cloud-netflix-hystrix.version>2.2.10.RELEASE</spring-cloud-netflix-hystrix.version>
         <mybatis.spring.boot.version>1.3.0</mybatis.spring.boot.version>
         <druid.version>1.2.11</druid.version>
         <disruptor.version>3.4.1</disruptor.version>
@@ -81,6 +84,13 @@
                 <groupId>org.springframework.cloud</groupId>
                 <artifactId>spring-cloud-starter-netflix-ribbon</artifactId>
                 <version>${spring-cloud-netflix-ribbon.version}</version>
+            </dependency>
+
+            <!-- https://mvnrepository.com/artifact/org.springframework.cloud/spring-cloud-starter-netflix-hystrix -->
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-starter-netflix-hystrix</artifactId>
+                <version>${spring-cloud-netflix-hystrix.version}</version>
             </dependency>
 
             <dependency>
