@@ -1432,6 +1432,8 @@ feign.RetryableException: Read timed out executing GET http://ALBRUS-CLOUD-PAYME
 > https://github.com/Netflix/Hystrix/wiki/How-To-Use
 >
 > https://www.cnblogs.com/kingszelda/p/10312242.html
+>
+> https://zhuanlan.zhihu.com/p/498105315
 
 Hystrix is a latency and fault tolerance library designed to isolate points of access to remote systems, services and 3rd party libraries, stop cascading failure and enable resilience in complex distributed systems where failure is inevitable.
 
@@ -1923,7 +1925,92 @@ Hystrix的资源隔离策略有信号量（SEMAPHORE） 和线程池（THREAD）
 | **隔离原理**     | 每个服务单独用线程池                                         | 通过信号量的计数器                                           |
 | **资源开销**     | 大，大量线程的上下文切换，容易造成机器负载高                 | 小，只是个计数器                                             |
 
-#### 2.6.9 小结
+#### 2.6.9 图形监控
+
+`pom.xml`:
+
+```xml
+<properties>
+    <spring-cloud-netflix-hystrix.version>2.2.10.RELEASE</spring-cloud-netflix-hystrix.version>
+</properties>
+
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-netflix-hystrix-dashboard</artifactId>
+    <version>${spring-cloud-netflix-hystrix.version}</version>
+</dependency>
+
+<!-- actuator 监控信息完善，所有服务都需要它 -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-actuator</artifactId>
+</dependency>
+```
+
+`AlbrusCloudHystrixDashboard9001Application.java`:
+
+```java
+@SpringBootApplication
+@EnableHystrixDashboard
+public class AlbrusCloudHystrixDashboard9001Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(AlbrusCloudHystrixDashboard9001Application.class, args);
+    }
+
+}
+```
+
+**被监控服务**
+
+`HystrixDashboardConfig.java`:
+
+```java
+@Configuration
+public class HystrixDashboardConfig {
+
+    /**
+     * 此配置是为了服务监控而配置，与服务容错本身无关
+     * ServletRegistrationBean 因为 Spring Boot 的默认路径不是 /hystrix.stream
+     * 只要在自己的项目里配置下面的 Servlet 就可以了
+     */
+    @Bean
+    public ServletRegistrationBean<HystrixMetricsStreamServlet> getServlet() {
+        HystrixMetricsStreamServlet streamServlet = new HystrixMetricsStreamServlet();
+        ServletRegistrationBean<HystrixMetricsStreamServlet> registrationBean = new ServletRegistrationBean<>(streamServlet);
+        registrationBean.setLoadOnStartup(1);
+        registrationBean.addUrlMappings("/actuator/hystrix.stream");
+        registrationBean.setName("HystrixMetricsStreamServlet");
+
+        return registrationBean;
+    }
+
+}
+```
+
+http://127.0.0.1:9001/hystrix
+
+http://127.0.0.1:8001/actuator/hystrix.stream
+
+![image-20230819160630605](./images/image-20230819160630605.png)
+
+**看懂监控**
+
+![image-20230819161128475](./images/image-20230819161128475.png)
+
+- 七色
+- 一圆（发现故障实例和高压力实例）
+  - 颜色：健康程度（绿色 > 黄色 > 橙色 > 红色）
+  - 大小：流量越大该实心圆就越大
+- 一线：用来记录 2 分钟内流量的相对变化，可以通过它来观察到流量的上升和下降趋势
+
+![image-20230819161339887](./images/image-20230819161339887.png)
+
+![image-20230819161348241](./images/image-20230819161348241.png)
+
+![image-20230819161359158](./images/image-20230819161359158.png)
+
+#### 2.6.10 小结
 
 **Hystrix 工作流程**
 
@@ -1953,3 +2040,5 @@ The following sections will explain this flow in greater detail:
 - 当信号量竞争失败/线程池队列满，就进入限流模式，执行 Fallback
 - 当熔断器开启，就熔断请求，执行 Fallback
 - 整个框架采用的 RxJava 的编程模式，回调函数满天飞
+
+### 2.7 

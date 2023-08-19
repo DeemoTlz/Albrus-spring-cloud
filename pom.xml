@@ -19,6 +19,8 @@
 
     <modules>
         <module>cloud-api-common</module>
+        <module>cloud-eureka-server7001</module>
+        <module>cloud-eureka-server7002</module>
         <module>cloud-provider-payment-api</module>
         <module>cloud-provider-eureka-payment8001</module>
         <module>cloud-provider-eureka-payment8002</module>
@@ -27,14 +29,13 @@
         <module>cloud-provider-zk-payment8004</module>
         <module>cloud-provider-consul-payment8005</module>
         <module>cloud-provider-consul-payment8006</module>
+        <module>cloud-consumer-hystrix-dashboard9001</module>
         <module>cloud-consumer-eureka-order80</module>
         <module>cloud-consumer-eureka-ribbon-order80</module>
         <module>cloud-consumer-eureka-feign-order80</module>
         <module>cloud-consumer-eureka-feign-hystrix-order80</module>
         <module>cloud-consumer-zk-order81</module>
         <module>cloud-consumer-consul-order82</module>
-        <module>cloud-eureka-server7001</module>
-        <module>cloud-eureka-server7002</module>
     </modules>
 
     <properties>
@@ -90,6 +91,13 @@
             <dependency>
                 <groupId>org.springframework.cloud</groupId>
                 <artifactId>spring-cloud-starter-netflix-hystrix</artifactId>
+                <version>${spring-cloud-netflix-hystrix.version}</version>
+            </dependency>
+
+            <!-- https://mvnrepository.com/artifact/org.springframework.cloud/spring-cloud-starter-netflix-hystrix-dashboard -->
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-starter-netflix-hystrix-dashboard</artifactId>
                 <version>${spring-cloud-netflix-hystrix.version}</version>
             </dependency>
 

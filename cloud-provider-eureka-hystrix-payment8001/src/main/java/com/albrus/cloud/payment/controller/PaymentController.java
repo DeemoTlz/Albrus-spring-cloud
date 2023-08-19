@@ -36,6 +36,7 @@ public class PaymentController {
 
     @GetMapping(value = "/{id}")
     public Result<PaymentVO> getPaymentById(@PathVariable("id") Long id) {
+        // http://127.0.0.1:8001/payment/-31
         PaymentBO payment = paymentService.getById(id);
         log.info("Thread: [{}]: the result of get payment by id: [{}] is [{}].", Thread.currentThread().getName(), id, payment);
 
@@ -48,6 +49,7 @@ public class PaymentController {
 
     @GetMapping(value = "/longtime/{id}")
     public Result<PaymentVO> getPaymentByIdLongtime(@PathVariable("id") Long id) {
+        // http://127.0.0.1:8001/payment/longtime/31
         PaymentBO payment = paymentService.getByIdLongtime(id);
         log.info("Thread: [{}]: the result of get payment by id: [{}] is [{}].", Thread.currentThread().getName(), id, payment);
 
