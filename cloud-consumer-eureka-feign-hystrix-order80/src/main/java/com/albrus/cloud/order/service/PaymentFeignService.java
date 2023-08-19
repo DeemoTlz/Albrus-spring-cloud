@@ -1,6 +1,7 @@
 package com.albrus.cloud.order.service;
 
 import com.albrus.cloud.common.model.Result;
+import com.albrus.cloud.order.service.impl.PaymentFeignHystrixServiceImpl;
 import com.albrus.cloud.payment.vo.PaymentVO;
 import com.albrus.cloud.payment.vo.param.PaymentVOParams;
 import org.springframework.cloud.client.ServiceInstance;
@@ -12,7 +13,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
 @Component
-@FeignClient(value = "ALBRUS-CLOUD-PAYMENT-HYSTRIX-SERVICE", path = "/payment")
+@FeignClient(value = "ALBRUS-CLOUD-PAYMENT-HYSTRIX-SERVICE", path = "/payment", fallback = PaymentFeignHystrixServiceImpl.class)
 public interface PaymentFeignService {
 
     @GetMapping(value = "/{id}")

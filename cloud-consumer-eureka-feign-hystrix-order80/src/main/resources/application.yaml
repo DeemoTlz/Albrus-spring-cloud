@@ -35,3 +35,19 @@ feign:
         loggerLevel: FULL
   circuitbreaker:
     enabled: true  # 开启服务降级
+
+hystrix:  # hystrix 配置
+  command:
+    default:
+      execution:
+        isolation:
+          strategy: THREAD  # THREAD|SEMAPHORE
+          thread:
+            timeoutInMilliseconds: 1500	 # 超时时间，单位ms，默认为1000
+          semaphore:
+            maxConcurrentRequests: 300000  # 最大并发请求量，默认10
+      circuitBreaker:
+        requestVolumeThreshold: 10  # 触发熔断的最小请求次数，默认20
+        errorThresholdPercentage: 10000  # 触发熔断的失败请求最小占比，默认50%
+        sleepWindowInMilliseconds:  100000  # 触发熔断后的服务休眠时长，休眠结束服务接口将再次启用，默认是5000毫秒
+  shareSecurityContext: true

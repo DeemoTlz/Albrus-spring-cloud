@@ -1576,6 +1576,24 @@ Hystrix 不再处于主动开发中，目前处于维护模式。
 - 次之，请求隔离
 - **由于 Hystrix 框架所属的层级为代码层，所以实现的是请求隔离，线程池或信号量**
 
+Hystrix的资源隔离策略有信号量（SEMAPHORE） 和线程池（THREAD）
+
+1.信号量隔离: 主要是使用一个原子的计数器来记录当前的值,请求来临之前,首先判断计数器的值是否已经达到了设置的最大值,如果没有,则继续运 行,计数器+1;反之,请求处理结束返回后,计数器进行-1,和令牌桶有点像,但是无法处…
+2.线程池隔离: 针对不同的服务设置不同的线程池,这样如果其他服务的线程阻塞的时候不会对其他服务造成影响。
+
+二者比较
+
+| 比较项           | THREAD                                                       | SEMAPHORE                                                    |
+| ---------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| **线程**         | 与调用线程非相同线程                                         | 与调用线程相同（Jetty线程）                                  |
+| **开销**         | 排队、调度、上下文开销等                                     | 无线程切换，开销低                                           |
+| **异步**         | 可以是异步，也可以是同步。看调用的方法                       | 同步调用，不支持异步                                         |
+| **并发支持**     | 支持（最大线程池大小hystrix.threadpool.default.maximumSize） | 支持（最大信号量上限maxConcurrentRequests）                  |
+| **是否超时**     | 支持，可直接返回                                             | 不支持，如果阻塞，只能通过调用协议（如：socket超时才能返回） |
+| **是否支持熔断** | 支持，当线程池到达maxSize后，再请求会触发fallback接口进行熔断 | 支持，当信号量达到maxConcurrentRequests后。再请求会触发fallback |
+| **隔离原理**     | 每个服务单独用线程池                                         | 通过信号量的计数器                                           |
+| **资源开销**     | 大，大量线程的上下文切换，容易造成机器负载高                 | 小，只是个计数器                                             |
+
 #### 2.6.8 环境构建
 
 Spring Cloud `2021.0.8` 版本默认已经没有 `spring-cloud-starter-netflix-hystrix` 了，其中 `spring-cloud-alibaba-dependencies 2021.0.5.0` 默认使用 `sentinel 1.8.6` 来代替之。
@@ -1610,9 +1628,11 @@ Spring Cloud `2021.0.8` 版本默认已经没有 `spring-cloud-starter-netflix-h
 - 对方服务（8001）down 机，调用者（80）不能一直卡死等待，必须有**服务降级**
 - 对方服务（8001）OK，调用者（80）出故障或有自我要求（自己的等待时间小于服务提供者），自己处理**服务降级**
 
-#### 2.6.9 `@HystrixCommand`
+#### 2.6.9 服务降级
 
-##### 2.6.9.1 Provider
+##### 2.6.9.1 `@HystrixCommand`
+
+**Provider**
 
 `PaymentServiceImpl.java`:
 
@@ -1661,7 +1681,7 @@ public class AlbrusCloudHystrixPayment8001Application {
 }
 ```
 
-##### 2.6.9.2 Consumer
+**Consumer**
 
 `application.xml`:
 
@@ -1676,6 +1696,22 @@ feign:
         loggerLevel: FULL
   circuitbreaker:
     enabled: true  # 开启服务降级
+
+hystrix:  # hystrix 配置
+  command:
+    default:
+      execution:
+        isolation:
+          strategy: THREAD  # THREAD|SEMAPHORE
+          thread:
+            timeoutInMilliseconds: 1500	 # 超时时间，单位ms，默认为1000
+          semaphore:
+            maxConcurrentRequests: 300000  # 最大并发请求量，默认10
+      circuitBreaker:
+        requestVolumeThreshold: 10  # 触发熔断的最小请求次数，默认20
+        errorThresholdPercentage: 10000  # 触发熔断的失败请求最小占比，默认50%
+        sleepWindowInMilliseconds:  100000  # 触发熔断后的服务休眠时长，休眠结束服务接口将再次启用，默认是5000毫秒
+  shareSecurityContext: true
 ```
 
 `AlbrusCloudConsumerFeignHystrixOrder80Application.java`:
@@ -1716,7 +1752,96 @@ private Result<PaymentVO> getByIdLongtimeFallHandler(Long id) {
 }
 ```
 
+##### 2.6.9.2 代码膨胀
 
+每个接口都需要配置，太复杂！
+
+`OrderController.java`:
+
+```java
+@Slf4j
+@RestController
+@RequestMapping("/consumer/order")
+@DefaultProperties(defaultFallback = "getByIdLongtimeFallHandler", commandProperties = {
+        @HystrixProperty(name="execution.isolation.thread.timeoutInMilliseconds",value="1500")
+})
+public class OrderController {
+    
+    @GetMapping(value = "/longtime/{id}")
+    @HystrixCommand
+    public Result<PaymentVO> getPaymentByIdLongtime(@PathVariable("id") Long id) {
+        // http://127.0.0.1:80/consumer/order/longtime/31
+        return paymentFeignService.getPaymentByIdLongtime(id);
+    }
+    
+    /**
+     * 兜底方案
+     */
+    private Result<PaymentVO> getByIdLongtimeFallHandler(Long id) {
+        log.warn("Thread: [{}]: failed to get payment by id: [{}].", Thread.currentThread().getName(), id);
+        return new Result<>(404, "NOT FOUND");
+    }
+
+}
+```
+
+##### 2.6.9.3 业务侵入
+
+每个业务接口都需要去指定 `@HystrixCommand` 注解，并且需要提供降级方法。
+
+新建一个 Feign 远程调用接口的**降级处理接口实现类**，用于作为降级处理兜底方案：
+
+`PaymentFeignHystrixServiceImpl.java`:
+
+```java
+@Component
+public class PaymentFeignHystrixServiceImpl implements PaymentFeignService {
+
+    @Override
+    public Result<PaymentVO> getPaymentById(Long id) {
+        return new Result<>(404, "getPaymentById: " + id);
+    }
+
+    @Override
+    public Result<PaymentVO> getPaymentByIdLongtime(Long id) {
+        return new Result<>(404, "getPaymentByIdLongtime: " + id);
+    }
+
+    @Override
+    public Result<ServiceInstance> getDiscoveryClientInfo() {
+        return new Result<>(404, "getDiscoveryClientInfo");
+    }
+
+    @Override
+    public Result<Integer> create(PaymentVOParams paymentVOParams) {
+        return new Result<>(404, "create: " + paymentVOParams);
+    }
+}
+```
+
+`PaymentFeignService.java`:
+
+```java
+@Component
+@FeignClient(value = "ALBRUS-CLOUD-PAYMENT-HYSTRIX-SERVICE", path = "/payment", fallback = PaymentFeignHystrixServiceImpl.class)
+public interface PaymentFeignService {
+
+    @GetMapping(value = "/{id}")
+    Result<PaymentVO> getPaymentById(@PathVariable("id") Long id);
+
+    @GetMapping(value = "/longtime/{id}")
+    Result<PaymentVO> getPaymentByIdLongtime(@PathVariable("id") Long id);
+
+    @GetMapping(value = "/discoveryClientInfo")
+    Result<ServiceInstance> getDiscoveryClientInfo();
+
+    @PostMapping
+    Result<Integer> create(@RequestBody PaymentVOParams paymentVOParams);
+
+}
+```
+
+`OrderController.java` 便不再需要指定降级相关处理代码了，业务代码更加清晰单纯。
 
 #### 2.6.x 小结
 
