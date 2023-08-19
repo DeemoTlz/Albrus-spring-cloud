@@ -71,5 +71,22 @@ eureka:
     lease-renewal-interval-in-seconds: 30  # 租约续约间隔时间，默认 30s
     lease-expiration-duration-in-seconds: 90  # 租约到期，服务时效时间，默认值 90s，服务超过 90s 没有发⽣⼼跳，EurekaServer 会将服务从列表移除
 
+hystrix:  # hystrix 配置
+  command:
+    default:
+      execution:
+        isolation:
+          strategy: THREAD  # THREAD|SEMAPHORE
+          thread:
+            timeoutInMilliseconds: 1500	 # 超时时间，单位ms，默认为 1000
+          semaphore:
+            maxConcurrentRequests: 300000  # 最大并发请求量，默认 10
+      circuitBreaker:
+        enable: true
+        requestVolumeThreshold: 10  # 触发熔断的最小请求次数，默认 20
+        errorThresholdPercentage: 60  # 触发熔断的失败请求最小占比，默认 50%
+        sleepWindowInMilliseconds: 100000  # 触发熔断后的服务休眠时长，休眠结束服务接口将再次启用，默认是 5000 毫秒
+  shareSecurityContext: true
+
 mybatis:
   mapper-locations: classpath:mapper/*.xml

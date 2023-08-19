@@ -26,7 +26,12 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     @Override
+    @HystrixCommand(fallbackMethod = "getByIdLongtimeFallHandler")
     public PaymentBO getById(Long id) {
+        if (id < 0) {
+            throw new RuntimeException("id must bigger than zero.");
+        }
+
         Payment payment = paymentDao.getById(id);
         return new PaymentBO(payment.getId(), payment.getSerial());
     }

@@ -43,11 +43,12 @@ hystrix:  # hystrix 配置
         isolation:
           strategy: THREAD  # THREAD|SEMAPHORE
           thread:
-            timeoutInMilliseconds: 1500	 # 超时时间，单位ms，默认为1000
+            timeoutInMilliseconds: 1500	 # 超时时间，单位ms，默认为 1000
           semaphore:
-            maxConcurrentRequests: 300000  # 最大并发请求量，默认10
+            maxConcurrentRequests: 300000  # 最大并发请求量，默认 10
       circuitBreaker:
-        requestVolumeThreshold: 10  # 触发熔断的最小请求次数，默认20
-        errorThresholdPercentage: 10000  # 触发熔断的失败请求最小占比，默认50%
-        sleepWindowInMilliseconds:  100000  # 触发熔断后的服务休眠时长，休眠结束服务接口将再次启用，默认是5000毫秒
+        enable: true
+        requestVolumeThreshold: 10  # 触发熔断的最小请求次数，默认 20
+        errorThresholdPercentage: 60  # 触发熔断的失败请求最小占比，默认 50%
+        sleepWindowInMilliseconds: 100000  # 触发熔断后的服务休眠时长，休眠结束服务接口将再次启用，默认是 5000 毫秒
   shareSecurityContext: true

@@ -1541,60 +1541,7 @@ Hystrix is no longer in active development, and is currently in maintenance mode
 
 Hystrix 不再处于主动开发中，目前处于维护模式。
 
-#### 2.6.4 服务降级
-
-降级与熔断紧密相关，熔断后业务如何表现，约定一个快速失败的 Fallback，即为服务降级。
-
-**Fallback**: 兜底方案，避免无限制等待并提供友好提示信息：服务器忙，请稍候再试！
-
-哪些情况会发生服务降级：
-
-- 程序运行异常（`RuntimeException`）
-- 超时
-- 服务熔断触发服务降级
-- 线程池/信号量打满也会导致服务降级
-
-#### 2.6.5 服务熔断
-
-达到最大服务访问后，直接拒绝访问，然后调用服务降级的方法并返回友好提示信息。类比保险丝。
-
-服务降级 -> 进而熔断 -> 恢复调用链路
-
-- 当我的应用无法提供服务时，我要对上游请求熔断，避免上游把我**压垮**
-- 当我的下游依赖成功率过低时，我要对下游请求熔断，避免下游把我**拖垮**
-
-#### 2.6.6 服务限流
-
-- 这里的限流与 Guava 的 RateLimiter 的限流差异比较大，一个是为了“保护自我”，一个是“保护下游”
-- 当对服务进行限流时，超过的流量将直接 Fallback，即熔断。而 RateLimiter 关心的其实是“流量整形”，将不规整流量在一定速度内规整
-
-#### 2.6.7 隔离
-
-- 业务之间不可互相影响，不同业务需要有独立的运行空间
-- 最彻底的，可以采用物理隔离，不同的机器部
-- 次之，采用进程隔离，一个机器多个 Tomcat
-- 次之，请求隔离
-- **由于 Hystrix 框架所属的层级为代码层，所以实现的是请求隔离，线程池或信号量**
-
-Hystrix的资源隔离策略有信号量（SEMAPHORE） 和线程池（THREAD）
-
-1.信号量隔离: 主要是使用一个原子的计数器来记录当前的值,请求来临之前,首先判断计数器的值是否已经达到了设置的最大值,如果没有,则继续运 行,计数器+1;反之,请求处理结束返回后,计数器进行-1,和令牌桶有点像,但是无法处…
-2.线程池隔离: 针对不同的服务设置不同的线程池,这样如果其他服务的线程阻塞的时候不会对其他服务造成影响。
-
-二者比较
-
-| 比较项           | THREAD                                                       | SEMAPHORE                                                    |
-| ---------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| **线程**         | 与调用线程非相同线程                                         | 与调用线程相同（Jetty线程）                                  |
-| **开销**         | 排队、调度、上下文开销等                                     | 无线程切换，开销低                                           |
-| **异步**         | 可以是异步，也可以是同步。看调用的方法                       | 同步调用，不支持异步                                         |
-| **并发支持**     | 支持（最大线程池大小hystrix.threadpool.default.maximumSize） | 支持（最大信号量上限maxConcurrentRequests）                  |
-| **是否超时**     | 支持，可直接返回                                             | 不支持，如果阻塞，只能通过调用协议（如：socket超时才能返回） |
-| **是否支持熔断** | 支持，当线程池到达maxSize后，再请求会触发fallback接口进行熔断 | 支持，当信号量达到maxConcurrentRequests后。再请求会触发fallback |
-| **隔离原理**     | 每个服务单独用线程池                                         | 通过信号量的计数器                                           |
-| **资源开销**     | 大，大量线程的上下文切换，容易造成机器负载高                 | 小，只是个计数器                                             |
-
-#### 2.6.8 环境构建
+#### 2.6.4 环境构建
 
 Spring Cloud `2021.0.8` 版本默认已经没有 `spring-cloud-starter-netflix-hystrix` 了，其中 `spring-cloud-alibaba-dependencies 2021.0.5.0` 默认使用 `sentinel 1.8.6` 来代替之。
 
@@ -1609,6 +1556,31 @@ Spring Cloud `2021.0.8` 版本默认已经没有 `spring-cloud-starter-netflix-h
     <version>${spring-cloud-netflix-hystrix.version}</version>
 </dependency>
 ```
+
+`application.yaml`:
+
+```yaml
+hystrix:  # hystrix 配置
+  command:
+    default:
+      execution:
+        isolation:
+          strategy: THREAD  # THREAD|SEMAPHORE
+          thread:
+            timeoutInMilliseconds: 1500	 # 超时时间，单位ms，默认为1000
+          semaphore:
+            maxConcurrentRequests: 300000  # 最大并发请求量，默认10
+      circuitBreaker:
+        requestVolumeThreshold: 10  # 触发熔断的最小请求次数，默认20
+        errorThresholdPercentage: 10000  # 触发熔断的失败请求最小占比，默认50%
+        sleepWindowInMilliseconds:  100000  # 触发熔断后的服务休眠时长，休眠结束服务接口将再次启用，默认是5000毫秒
+  shareSecurityContext: true
+```
+
+参考：
+
+- `com.netflix.hystrix.contrib.javanica.conf.HystrixPropertiesManager`
+- `com.netflix.hystrix.HystrixCommandProperties`
 
 构建消费端和服务端环境结构简单、问题根因简单，这里不再赘述了。
 
@@ -1628,9 +1600,20 @@ Spring Cloud `2021.0.8` 版本默认已经没有 `spring-cloud-starter-netflix-h
 - 对方服务（8001）down 机，调用者（80）不能一直卡死等待，必须有**服务降级**
 - 对方服务（8001）OK，调用者（80）出故障或有自我要求（自己的等待时间小于服务提供者），自己处理**服务降级**
 
-#### 2.6.9 服务降级
+#### 2.6.5 服务降级
 
-##### 2.6.9.1 `@HystrixCommand`
+降级与熔断紧密相关，熔断后业务如何表现，约定一个快速失败的 Fallback，即为服务降级。
+
+**Fallback**: 兜底方案，避免无限制等待并提供友好提示信息：服务器忙，请稍候再试！
+
+哪些情况会发生服务降级：
+
+- 程序运行异常（`RuntimeException`）
+- 超时
+- 服务熔断触发服务降级
+- 线程池/信号量打满也会导致服务降级
+
+##### 2.6.5.1 `@HystrixCommand`
 
 **Provider**
 
@@ -1704,13 +1687,14 @@ hystrix:  # hystrix 配置
         isolation:
           strategy: THREAD  # THREAD|SEMAPHORE
           thread:
-            timeoutInMilliseconds: 1500	 # 超时时间，单位ms，默认为1000
+            timeoutInMilliseconds: 1500	 # 超时时间，单位ms，默认为 1000
           semaphore:
-            maxConcurrentRequests: 300000  # 最大并发请求量，默认10
+            maxConcurrentRequests: 300000  # 最大并发请求量，默认 10
       circuitBreaker:
-        requestVolumeThreshold: 10  # 触发熔断的最小请求次数，默认20
-        errorThresholdPercentage: 10000  # 触发熔断的失败请求最小占比，默认50%
-        sleepWindowInMilliseconds:  100000  # 触发熔断后的服务休眠时长，休眠结束服务接口将再次启用，默认是5000毫秒
+        enable: true
+        requestVolumeThreshold: 10  # 触发熔断的最小请求次数，默认 20
+        errorThresholdPercentage: 60  # 触发熔断的失败请求最小占比，默认 50%
+        sleepWindowInMilliseconds: 100000  # 触发熔断后的服务休眠时长，休眠结束服务接口将再次启用，默认是 5000 毫秒
   shareSecurityContext: true
 ```
 
@@ -1752,7 +1736,7 @@ private Result<PaymentVO> getByIdLongtimeFallHandler(Long id) {
 }
 ```
 
-##### 2.6.9.2 代码膨胀
+##### 2.6.5.2 代码膨胀
 
 每个接口都需要配置，太复杂！
 
@@ -1785,7 +1769,7 @@ public class OrderController {
 }
 ```
 
-##### 2.6.9.3 业务侵入
+##### 2.6.5.3 业务侵入
 
 每个业务接口都需要去指定 `@HystrixCommand` 注解，并且需要提供降级方法。
 
@@ -1843,7 +1827,123 @@ public interface PaymentFeignService {
 
 `OrderController.java` 便不再需要指定降级相关处理代码了，业务代码更加清晰单纯。
 
-#### 2.6.x 小结
+#### 2.6.6 服务熔断
+
+> https://martinfowler.com/bliki/CircuitBreaker.html
+>
+> This simple circuit breaker avoids making the protected call when the circuit is open, but would need an **external intervention** to reset it when things are well again. This is a reasonable approach with electrical circuit breakers in buildings, but for software circuit breakers **we can have the breaker itself detect** if the underlying calls are working again. We can implement this self-resetting behavior by trying the protected call again after a suitable interval, and resetting the breaker should it succeed.
+>
+> ![img](./images/state.png)
+
+达到最大服务访问后，直接拒绝访问，然后调用服务降级的方法并返回友好提示信息。类比**保险丝**。
+
+**服务降级 -> 进而熔断 -> 恢复调用链路**
+
+- 当我的应用无法提供服务时，我要对上游请求熔断，避免上游把我**压垮**
+- 当我的下游依赖成功率过低时，我要对下游请求熔断，避免下游把我**拖垮**
+- 当失败的调用到一定阈值，缺省是 **10 秒内 20 次 50%+** 调用失败，就会启动熔断机制
+- 沉默窗口期过后，会尝试恢复服务调用
+
+`application.yaml`:
+
+```yaml
+hystrix:  # hystrix 配置
+  command:
+    default:
+      circuitBreaker:
+        enable: true
+        requestVolumeThreshold: 10  # 触发熔断的最小请求次数，默认 20
+        errorThresholdPercentage: 60  # 触发熔断的失败请求最小占比，默认 50%
+        sleepWindowInMilliseconds: 100000  # 触发熔断后的服务休眠时长，休眠结束服务接口将再次启用，默认是 5000 毫秒
+  shareSecurityContext: true
+```
+
+参考：
+
+- `com.netflix.hystrix.contrib.javanica.conf.HystrixPropertiesManager`
+- `com.netflix.hystrix.HystrixCommandProperties`
+
+**熔断类型**
+
+- CLOSED
+
+  熔断关闭，不对服务进行熔断
+
+- OPEN
+
+  请求进入降级响应模式，不再调用真实业务逻辑。内部设置时钟一般为 MTTR（平均故障处理时间），当 OPEN 时长达到所设置的始终长度时，将进入半熔断状态（HALF-OPEN）
+
+- HALF_OPEN
+
+  部分请求根据规则调用真实业务，如果请求成功且符合规则则认为当前服务正常，将关闭熔断（CLOSED）
+
+![img](./images/1196330-20190124002515845-716882100-1692429234012-7.png)
+
+The precise way that the circuit opening and closing occurs is as follows:
+
+1. Assuming the volume across a circuit meets a certain threshold (`HystrixCommandProperties.circuitBreakerRequestVolumeThreshold()`)...
+   默认 10 秒内 20 个请求
+2. And assuming that the error percentage exceeds the threshold error percentage (`HystrixCommandProperties.circuitBreakerErrorThresholdPercentage()`)...
+   默认 10 秒内错误请求次数 50%+
+3. Then the circuit-breaker transitions from `CLOSED` to `OPEN`.
+   开启熔断
+4. While it is open, it short-circuits all requests made against that circuit-breaker.
+   所有请求都不再转发，直接进行服务降级流程
+5. After some amount of time (`HystrixCommandProperties.circuitBreakerSleepWindowInMilliseconds()`), the next single request is let through (this is the `HALF-OPEN` state). If the request fails, the circuit-breaker returns to the `OPEN` state for the duration of the sleep window. If the request succeeds, the circuit-breaker transitions to `CLOSED` and the logic in **1.** takes over again.
+   默认 5 秒钟之后，半开熔断，放过一个请求（**哨兵**）尝试测试服务是否正常，若成功则恢复服务链路（进入 1），否则，继续 4。
+
+#### 2.6.7 服务限流
+
+- 这里的限流与 Guava 的 RateLimiter 的限流差异比较大，一个是为了“保护自我”，一个是“保护下游”
+- 当对服务进行限流时，超过的流量将直接 Fallback，即熔断。而 RateLimiter 关心的其实是“流量整形”，将不规整流量在一定速度内规整
+
+#### 2.6.8 隔离
+
+- 业务之间不可互相影响，不同业务需要有独立的运行空间
+- 最彻底的，可以采用物理隔离，不同的机器部
+- 次之，采用进程隔离，一个机器多个 Tomcat
+- 次之，请求隔离
+- **由于 Hystrix 框架所属的层级为代码层，所以实现的是请求隔离，线程池或信号量**
+
+Hystrix的资源隔离策略有信号量（SEMAPHORE） 和线程池（THREAD）
+
+1. 信号量隔离: 主要是使用一个原子的计数器来记录当前的值，请求来临之前，首先判断计数器的值是否已经达到了设置的最大值，如果没有，则继续运行计数器 +1；反之，请求处理结束返回后，计数器进行 -1，和令牌桶有点像，但是无法处理突发流量
+2. 线程池隔离: 针对不同的服务设置不同的线程池，这样如果其他服务的线程阻塞的时候不会对其他服务造成影响
+
+二者比较
+
+| 比较项           | THREAD                                                       | SEMAPHORE                                                    |
+| ---------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| **线程**         | 与调用线程非相同线程                                         | 与调用线程相同（Jetty线程）                                  |
+| **开销**         | 排队、调度、上下文开销等                                     | 无线程切换，开销低                                           |
+| **异步**         | 可以是异步，也可以是同步。看调用的方法                       | 同步调用，不支持异步                                         |
+| **并发支持**     | 支持（最大线程池大小hystrix.threadpool.default.maximumSize） | 支持（最大信号量上限maxConcurrentRequests）                  |
+| **是否超时**     | 支持，可直接返回                                             | 不支持，如果阻塞，只能通过调用协议（如：socket超时才能返回） |
+| **是否支持熔断** | 支持，当线程池到达maxSize后，再请求会触发fallback接口进行熔断 | 支持，当信号量达到maxConcurrentRequests后。再请求会触发fallback |
+| **隔离原理**     | 每个服务单独用线程池                                         | 通过信号量的计数器                                           |
+| **资源开销**     | 大，大量线程的上下文切换，容易造成机器负载高                 | 小，只是个计数器                                             |
+
+#### 2.6.9 小结
+
+**Hystrix 工作流程**
+
+The following diagram shows what happens when you make a request to a service dependency by means of Hystrix:
+
+![img](./images/hystrix-command-flow-chart.png)
+
+The following sections will explain this flow in greater detail:
+
+1. [Construct a `HystrixCommand` or `HystrixObservableCommand` Object](https://github.com/Netflix/Hystrix/wiki/How-it-Works#flow1)
+2. [Execute the Command](https://github.com/Netflix/Hystrix/wiki/How-it-Works#flow2)
+3. [Is the Response Cached?](https://github.com/Netflix/Hystrix/wiki/How-it-Works#flow3)
+4. [Is the Circuit Open?](https://github.com/Netflix/Hystrix/wiki/How-it-Works#flow4)
+5. [Is the Thread Pool/Queue/Semaphore Full?](https://github.com/Netflix/Hystrix/wiki/How-it-Works#flow5)
+6. [`HystrixObservableCommand.construct()` or `HystrixCommand.run()`](https://github.com/Netflix/Hystrix/wiki/How-it-Works#flow6)
+7. [Calculate Circuit Health](https://github.com/Netflix/Hystrix/wiki/How-it-Works#flow7)
+8. [Get the Fallback](https://github.com/Netflix/Hystrix/wiki/How-it-Works#flow8)
+9. [Return the Successful Response](https://github.com/Netflix/Hystrix/wiki/How-it-Works#flow9)
+
+**Hystrix 总结**
 
 - Hystrix 是基于单机应用的熔断限流框架
 - 根据熔断器的滑动窗口判断当前请求是否可以执行
