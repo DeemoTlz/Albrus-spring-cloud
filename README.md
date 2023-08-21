@@ -76,6 +76,8 @@ Table 1. Release train Spring Boot compatibility
 
 ## 二、微服务组件
 
+![Diagram](https://spring.io/img/extra/cloud-3.svg)
+
 ![image-20230811195613354](./images/image-20230811195613354.png)
 
 **停更前**：
@@ -2041,4 +2043,125 @@ The following sections will explain this flow in greater detail:
 - 当熔断器开启，就熔断请求，执行 Fallback
 - 整个框架采用的 RxJava 的编程模式，回调函数满天飞
 
-### 2.7 
+### 2.7 Gateway
+
+#### 2.7.1 简介
+
+**Zuul**
+
+> Zuul2 迟迟不肯更新、内部分歧较大，放弃幻想~
+>
+> https://github.com/Netflix/zuul/wiki/Getting-Started
+
+**Gateway**
+
+> https://spring.io/projects/spring-cloud-gateway
+>
+> https://docs.spring.io/spring-cloud-gateway/docs/3.1.8/reference/html/
+>
+> https://zhuanlan.zhihu.com/p/555656762?utm_id=0
+>
+> https://blog.csdn.net/a1036645146/article/details/106383883
+
+```xml
+<spring-cloud-gateway.version>3.1.8</spring-cloud-gateway.version>
+```
+
+This project provides an API Gateway built on top of the Spring Ecosystem, including: Spring 5, Spring Boot 2 and Project Reactor. Spring Cloud Gateway aims to provide a simple, yet effective way to route to APIs and provide cross cutting concerns to them such as: security, monitoring/metrics, and resiliency.
+该项目提供了一个构建在 Spring 生态系统之上的 API 网关，包括：Spring 5、Spring Boot 2 和 Project Reactor。Spring Cloud Gateway 旨在提供一种简单而有效的方法来路由到 API 并为其提供横切关注点，例如：**安全性**、**监控/指标**和**弹性**。
+
+Spring Cloud Gateway is built on [Spring Boot 2.x](https://spring.io/projects/spring-boot#learn), [Spring WebFlux](https://docs.spring.io/spring/docs/current/spring-framework-reference/web-reactive.html), and [Project Reactor](https://projectreactor.io/docs). 
+Spring Cloud Gateway 构建于 [Spring Boot 2.x](https://spring.io/projects/spring-boot#learn)、[Spring WebFlux](https://docs.spring.io/spring/docs/current/spring-framework-reference/web-reactive.html) 和 [Project Reactor](https://projectreactor.io/docs) 之上。
+
+Spring Cloud Gateway 需要 Spring Boot 和 Spring Webflux 提供的 Netty 运行时。它不适用于传统的  Servlet 容器或构建为 WAR 时。
+Spring Cloud Gateway requires the Netty runtime provided by Spring Boot and Spring Webflux. It does not work in a traditional Servlet Container or when built as a WAR.
+
+
+
+#### 2.7.2 Gateway VS Zuul
+
+Spring Cloud Gateway 是基于 **WebFlux** 框架实现的，而 WebFlux 框架底层则使用了**高性能**的 **Reactor** 模式通信框架 **Netty**。
+
+##### 2.7.2.1 设计理念
+
+**Spring Cloud Gateway**
+
+1. 基于 Spring Framework 5，Project Reactor 和 Spring Boot 2.0
+2. 集成 Hystrix 断路器
+3. 集成 Spring Cloud DiscoveryClient
+4. Predicates 和 Filters 作用于特定路由，易于编写的 Predicates 和 Filters
+5. 具备一些网关的高级功能：动态路由、限流、路径重写
+
+**Zuul**
+
+1. Zuul 1.x，是一个基于阻塞 I/O 的 API Gateway
+2. Zuul 1.x 基于 Servlet 2.5 使用阻塞架构它不支持任何长连接(如 WebSocket) Zuul 的设计模式和 Nginx 较像，每次 I/O 操作都是从工作线程中选择一个执行，请求线程被阻塞到工作线程完成，但是差别是Nginx 用 C++ 实现，Zuul 用 Java 实现，而 JVM 本身会有第一次加载较慢的情况，使得 Zuul 的性能相对较差
+3. Zuul 2.x 理念更先进，想基于 Netty 非阻塞和支持长连接，但 Spring Cloud 目前还没有整合。 Zuul 2.x 的性能较 Zuul 1.x 有较大提升。在性能方面，根据官方提供的基准测试，Spring Cloud Gateway 的 RPS（每秒请求数）是 Zuul 的 1.6 倍
+
+##### 2.7.2.2 Spring Cloud Zuul IO 模型
+
+Spring Cloud 中所集成的 Zuul 版本，采用的是 Tomcat 容器，使用的是传统的 Servlet I/O 处理模型。
+
+大家知道，Servlet 由 Servlet Container 进行生命周期管理。Container 启动时构造 Servlet 对象并调用  `Servlet#init()` 进行初始化；Container 关闭时调用 `Servlet#destory()` 销毁 Servlet；Container 运行时接受请求，并为每个请求分配一个线程（一般从线程池中获取空闲线程）然后调用 `service()`。
+
+**缺点**
+
+Servlet 是一个简单的网络 I/O 模型，当请求进入 Servlet Container 时，Servlet Container 就会为其绑定一个线程，**在并发不高的场景下这种模型是适用的**，但是一旦并发上升，线程数量就会上涨，而线程资源代价是昂贵的（上线文切换，内存消耗大）严重影响请求的处理时间。在一些简单的业务场景下，不希望为每个 Request 分配一个线程，只需要 1 个或几个线程就能应对极大并发的请求，这种业务场景下 Servlet 模型没有优势。
+![在这里插入图片描述](./images/format,png.png)
+
+**Spring Cloud Zuul 是基于 Servlet 之上的一个阻塞式处理模型**，即 Spring 实现了处理所有 Request 请求的一个 Servlet（`DispatcherServlet`），并由该 Servlet 阻塞式处理。**所以 Spring Cloud Zuul 无法摆脱 Servlet 模型的弊端。**虽然 Zuul 2.0 开始，使用了 Netty，并且已经有了大规模 Zuul 2.0 集群部署的成熟案例，但是，Spring Cloud 官方已经没有集成改版本的计划了。
+
+##### 2.7.2.3 WebFlux 模型
+
+![img](https://spring.io/img/extra/reactive-5.svg)
+
+**在 Servlet3.1 之后有了异步非阻塞的支持。**而 WebFlux 是一个典型非阻塞异步的框架，它的核心是基于 Reactor 的相关 API 实现。相对于传统的 Web 框架来说，它可以运行在诸如 Netty、Undertow 以及支持 Servlet 3.1 的容器上。
+
+Spring WebFlux 是 Spring 5.0 引入的新的响应式框架，区别于 Spring MVC，它不需要依赖 Servlet API，它是完全异步非阻塞的，并且基于 Reactor 来实现响应式流规范，非阻塞式 + 函数式编程（Spring5 必须让你使用 JDK 8）。
+
+WebFlux 模式替换了旧的 Servlet 线程模型。用少量的线程处理 Request IO 和 Response IO 操作，这些线程称为 `Loop` 线程，而业务交给响应式编程框架处理，响应式编程是非常灵活的，用户可以将业务中阻塞的操作提交到响应式框架的 `Work` 线程中执行，而不阻塞的操作依然可以在 `Loop` 线程中进行处理，大大提高了 `Loop` 线程的利用率。官方结构图：
+
+![在这里插入图片描述](./images/format,png-1692618634896-6.png)
+
+WebFlux 虽然可以兼容多个底层的通信框架，但是一般情况下，底层使用的还是 Netty，毕竟 Netty 是目前业界认可的最高性能的通信框架。而 WebFlux 的 `Loop` 线程，正好就是著名的 Reactor 模式 IO 处理模型的 Reactor 线程，如果使用的是高性能的通信框架 Netty，这就是 Netty 的 EventLoop 线程。
+
+#### 2.7.3 工作方式
+
+[**Glossary**](https://docs.spring.io/spring-cloud-gateway/docs/3.1.8/reference/html/#glossary) - 术语表、特征
+
+- **Route** - 路由
+
+  The basic building block of the gateway. It is defined by an ID, a destination URI, a collection of predicates, and a collection of filters. A route is matched if the aggregate predicate is true.
+  网关配置的基本组成模块，和 Zuul 的路由配置模块类似。一个 **Route 模块**由一个 ID、目标 URI、一组断言和一组过滤器组成。**如果断言为真，则路由匹配，目标 URI 会被访问。**
+
+- **Predicate** - 断言
+
+  This is a [Java 8 Function Predicate](https://docs.oracle.com/javase/8/docs/api/java/util/function/Predicate.html). The input type is a [Spring Framework `ServerWebExchange`](https://docs.spring.io/spring/docs/5.0.x/javadoc-api/org/springframework/web/server/ServerWebExchange.html). This lets you match on anything from the HTTP request, such as headers or parameters.
+  这是一个 Java 8 的 Predicate，可以使用它来匹配来自 HTTP 请求的任何内容，例如 headers 或 parameters。**断言**的输入类型是一个 `ServerWebExchange`。
+
+- **Filter** - 过滤器
+
+  These are instances of [`GatewayFilter`](https://github.com/spring-cloud/spring-cloud-gateway/tree/main/spring-cloud-gateway-server/src/main/java/org/springframework/cloud/gateway/filter/GatewayFilter.java) that have been constructed with a specific factory. Here, you can modify requests and responses before or after sending the downstream request.
+  和 Zuul 的过滤器在概念上类似，是 `GatewayFilter` 类的实例，可以使用它拦截和修改请求，并且对上游的响应，进行二次处理。
+
+![image-20230821201232129](./images/image-20230821201232129.png)
+
+**工作流程**
+
+![Spring Cloud Gateway Diagram](./images/spring_cloud_gateway_diagram.png)
+
+Clients make requests to Spring Cloud Gateway. If the Gateway Handler Mapping determines that a request matches a route, it is sent to the Gateway Web Handler. This handler runs the request through a filter chain that is specific to the request. The reason the filters are divided by the dotted line is that filters can run logic both before and after the proxy request is sent. All “pre” filter logic is executed. Then the proxy request is made. After the proxy request is made, the “post” filter logic is run.
+客户端向 Spring Cloud Gateway 发出请求。如果网关处理程序映射（Gateway Handler Mapping）确定请求与**路由匹配**，则会将其发送到网关 Web 处理程序（Gateway Web Handler）。
+该处理程序（Gateway Web Handler）通过特定于请求的**过滤器链**运行请求。过滤器被虚线分开的原因是过滤器可以**在发送代理请求之前和之后运行逻辑**。执行所有 `pre` 过滤器逻辑。然后发出代理请求。发出代理请求后，将运行 `post` 过滤器逻辑。
+在 `pre` 过滤上可以做参数校验、权限校验、流量监控、日志输出、协议转换等工作，在 `post` 过滤上可以做响应内容修改、响应头修改、日志输出、流量监控等工作。
+
+==路由转发、执行过滤器链==
+
+URIs defined in routes without a port get default port values of 80 and 443 for the HTTP and HTTPS URIs, respectively.
+在没有端口的路由中定义的 URI 的 HTTP 和 HTTPS URI 的默认端口值分别为 80 和 443。
+
+#### 2.7.4 结合注册中心
+
+> 单机结合 Gateway 的演示没有必要了~
+>
+> 直接上手微服务名动态路由方式！

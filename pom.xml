@@ -36,6 +36,7 @@
         <module>cloud-consumer-eureka-feign-hystrix-order80</module>
         <module>cloud-consumer-zk-order81</module>
         <module>cloud-consumer-consul-order82</module>
+        <module>cloud-gateway-gateway9527</module>
     </modules>
 
     <properties>
