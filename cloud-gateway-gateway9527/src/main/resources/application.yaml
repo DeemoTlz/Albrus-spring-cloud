@@ -6,10 +6,15 @@ spring:
     name: albrus-cloud-gateway  # 服务别名
   cloud:
     gateway:
+      discovery:
+        locator:
+          enabled: false
       routes:
-        - id: payment-gateway  # 路由 ID
-          uri: http://127.0.0.1:8081  # 匹配后提供服务的路由地址
+        - id: payment_method_get_route  # 路由 ID
+          # uri: http://127.0.0.1:8001  # 匹配后提供服务的路由地址
+          uri: lb://albrus-cloud-payment-service  # 匹配后提供服务的路由地址
           predicates:
+            - Method=GET
             - Path=/payment/**  # 断言
 
 eureka:
@@ -31,6 +36,3 @@ eureka:
       region: rnl
     lease-renewal-interval-in-seconds: 30  # 租约续约间隔时间，默认 30s
     lease-expiration-duration-in-seconds: 90  # 租约到期，服务时效时间，默认值 90s，服务超过 90s 没有发⽣⼼跳，EurekaServer 会将服务从列表移除
-
-mybatis:
-  mapper-locations: classpath:mapper/*.xml

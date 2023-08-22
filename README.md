@@ -2155,13 +2155,473 @@ Clients make requests to Spring Cloud Gateway. If the Gateway Handler Mapping de
 该处理程序（Gateway Web Handler）通过特定于请求的**过滤器链**运行请求。过滤器被虚线分开的原因是过滤器可以**在发送代理请求之前和之后运行逻辑**。执行所有 `pre` 过滤器逻辑。然后发出代理请求。发出代理请求后，将运行 `post` 过滤器逻辑。
 在 `pre` 过滤上可以做参数校验、权限校验、流量监控、日志输出、协议转换等工作，在 `post` 过滤上可以做响应内容修改、响应头修改、日志输出、流量监控等工作。
 
+![img](./images/v2-329576f64f83ea76b5def5d945616b02_r.jpg)
+
 ==路由转发、执行过滤器链==
 
 URIs defined in routes without a port get default port values of 80 and 443 for the HTTP and HTTPS URIs, respectively.
 在没有端口的路由中定义的 URI 的 HTTP 和 HTTPS URI 的默认端口值分别为 80 和 443。
 
-#### 2.7.4 结合注册中心
+#### 2.7.4 结合注册中心部署
 
-> 单机结合 Gateway 的演示没有必要了~
+> 单机结合 Gateway 的演示就没有必要了吧~
 >
-> 直接上手微服务名动态路由方式！
+> 我们直接上手高难度 -> 微服务名动态路由方式！
+
+`pom.xml`:
+
+```xml
+<!-- gateway -->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-gateway</artifactId>
+</dependency>
+
+<!-- eureka-client -->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+</dependency>
+
+<!-- loadbalancer -->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+</dependency>
+```
+
+**路由配置方式一**
+
+`application.yaml`:
+
+```yaml
+server:
+  port: 9527
+
+spring:
+  application:
+    name: albrus-cloud-gateway  # 服务别名
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: false
+      routes:
+        - id: payment_method_get_route  # 路由 ID
+          # uri: http://127.0.0.1:8001  # 匹配后提供服务的路由地址
+          uri: lb://albrus-cloud-payment-service  # 匹配后提供服务的路由地址
+          predicates:
+            - Method=GET
+            - Path=/payment/**  # 断言
+
+eureka:
+  client:
+    register-with-eureka: true  # 将自己注册到 EurekaServer
+    fetch-registry: true  # 是否从 EurekaServer 抓取已有的注册信息，默认为 true。单节点无所谓，集群必须设置为 true 才能配合 ribbon 使用负载均衡
+    service-url:
+      # defaultZone: http://localhost:7001/eureka/  # 路径包含 /eureka 是因为 EurekaServer 内部有 web 过滤器
+      defaultZone: http://eureka7001.com:7001/eureka/, http://eureka7002.com:7002/eureka/  # 集群配置
+    registry-fetch-interval-seconds: 30  # 隔多久从服务中心拉取一次服务列表，默认 30s
+  instance:
+    # 使用 IP 注册，否则会使用主机注册（此处考虑老版本的兼容，新版本经过实验都是 IP）
+    prefer-ip-address: true
+    # 自定义实例显示格式，加上版本号便于多版本管理，注意是 ip-address，早期版本是 ipaddress
+    instance-id: ${spring.cloud.client.ip-address}:${spring.application.name}:${server.port}:@project.version@
+    # 自定义元数据（key/value 结构）
+    metadata-map:
+      cluster: cll
+      region: rnl
+    lease-renewal-interval-in-seconds: 30  # 租约续约间隔时间，默认 30s
+    lease-expiration-duration-in-seconds: 90  # 租约到期，服务时效时间，默认值 90s，服务超过 90s 没有发⽣⼼跳，EurekaServer 会将服务从列表移除
+```
+
+**路由配置方式二**
+
+`GatewayConfiguration.java`:
+
+```java
+@Configuration
+public class GatewayConfiguration {
+
+    @Bean
+    public RouteLocator paymentPathRoute(RouteLocatorBuilder builder) {
+        return builder.routes()
+                .route("payment_path_route", r -> r.path("/discoveryClientInfo").uri("lb://albrus-cloud-payment-service"))
+                .build();
+    }
+
+}
+```
+
+`AlbrusCloudGateway9527Application.java`:
+
+```java
+@SpringBootApplication
+@EnableEurekaClient
+public class AlbrusCloudGateway9527Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(AlbrusCloudGateway9527Application.class, args);
+    }
+
+}
+```
+
+#### 2.7.5 Predicate
+
+> https://docs.spring.io/spring-cloud-gateway/docs/3.1.8/reference/html/#gateway-request-predicates-factories
+
+![img](./images/v2-1924a8b8fc75570729af914f2c6f092c_r.jpg)
+
+```tex
+Loaded RoutePredicateFactory [After]
+Loaded RoutePredicateFactory [Before]
+Loaded RoutePredicateFactory [Between]
+Loaded RoutePredicateFactory [Cookie]
+Loaded RoutePredicateFactory [Header]
+Loaded RoutePredicateFactory [Host]
+Loaded RoutePredicateFactory [Method]
+Loaded RoutePredicateFactory [Path]
+Loaded RoutePredicateFactory [Query]
+Loaded RoutePredicateFactory [ReadBody]
+Loaded RoutePredicateFactory [RemoteAddr]
+Loaded RoutePredicateFactory [XForwardedRemoteAddr]
+Loaded RoutePredicateFactory [Weight]
+Loaded RoutePredicateFactory [CloudFoundryRouteService]
+```
+
+![在这里插入图片描述](./images/aHR0cHM6Ly91cGxvYWQtaW1hZ2VzLmppYW5zaHUuaW8vdXBsb2FkX2ltYWdlcy8xOTgxNjEzNy1iYjA0NmRiZjE5YmVlMWI0LmdpZg.gif)
+
+1. After：匹配在指定日期时间之后发生的请求
+
+   ```yaml
+   spring:
+     cloud:
+       gateway:
+         routes:
+         - id: after_route
+           uri: https://example.org
+           predicates:
+           - After=2017-01-20T17:42:47.789-07:00[America/Denver]
+   ```
+
+2. Before：匹配在指定日期之前发生的请求
+
+   ```yaml
+   spring:
+     cloud:
+       gateway:
+         routes:
+         - id: before_route
+           uri: https://example.org
+           predicates:
+           - Before=2017-01-20T17:42:47.789-07:00[America/Denver]
+   ```
+
+3. Between：需要指定两个日期参数，设定一个时间区间，匹配此时间区间内的请求
+
+   ```yaml
+   spring:
+     cloud:
+       gateway:
+         routes:
+         - id: between_route
+           uri: https://example.org
+           predicates:
+           - Between=2017-01-20T17:42:47.789-07:00[America/Denver], 2017-01-21T17:42:47.789-07:00[America/Denver]
+   ```
+
+4. Cookie：需要指定两个参数，分别为 name 和 regexp（正则表达式），也可以理解 Key 和 Value，匹配具有给定名称且其值与正则表达式匹配的 Cookie
+
+   ```yaml
+   spring:
+     cloud:
+       gateway:
+         routes:
+         - id: cookie_route
+           uri: https://example.org
+           predicates:
+           - Cookie=chocolate, ch.p
+   ```
+
+5. Header：需要两个参数 header 和 regexp（正则表达式），也可以理解为 Key 和 Value，匹配请求携带信息
+
+   ```yaml
+   spring:
+     cloud:
+       gateway:
+         routes:
+         - id: header_route
+           uri: https://example.org
+           predicates:
+           - Header=X-Request-Id, \d+
+
+6. Host：匹配当前请求是否来自于设置的主机
+
+   ```yaml
+   spring:
+     cloud:
+       gateway:
+         routes:
+         - id: host_route
+           uri: https://example.org
+           predicates:
+           - Host=**.somehost.org,**.anotherhost.org
+
+7. Method：可以设置一个或多个参数，匹配 HTTP 请求，比如 GET、POST
+
+   ```yaml
+   spring:
+     cloud:
+       gateway:
+         routes:
+         - id: method_route
+           uri: https://example.org
+           predicates:
+           - Method=GET,POST
+
+8. Path：匹配指定路径下的请求，可以是多个用逗号分隔
+
+   ```yaml
+   spring:
+     cloud:
+       gateway:
+         routes:
+         - id: path_route
+           uri: https://example.org
+           predicates:
+           - Path=/red/{segment},/blue/{segment}
+   ```
+
+   This route matches if the request path was, for example: `/red/1` or `/red/1/` or `/red/blue` or `/blue/green`.
+
+   If `matchTrailingSlash` is set to `false`(defaults to `true`), then request path `/red/1/` will not be matched.
+
+9. Query：需要指定一个或者多个参数，一个必须参数和一个可选的正则表达式，匹配请求中是否包含第一个参数，如果有两个参数，则匹配请求中第一个参数的值是否符合正则表达式
+
+   ```yaml
+   spring:
+     cloud:
+       gateway:
+         routes:
+         - id: query_route
+           uri: https://example.org
+           predicates:
+           - Query=green
+           - Query=red, gree.
+
+10. RemoteAddr：匹配指定 IP 或 IP 段，符合条件转发
+
+    ```yaml
+    spring:
+      cloud:
+        gateway:
+          routes:
+          - id: remoteaddr_route
+            uri: https://example.org
+            predicates:
+            - RemoteAddr=192.168.1.1/24
+
+11. XForwardedRemoteAddr: 匹配 CIDR 格式 IPv4 或 IPv6 字符串，可以与反向代理（例如负载均衡器或 Web 应用程序防火墙）一起使用，其中仅当请求来自这些反向代理所使用的可信 IP 地址列表时才应允许请求
+
+    ```yaml
+    spring:
+      cloud:
+        gateway:
+          routes:
+          - id: xforwarded_remoteaddr_route
+            uri: https://example.org
+            predicates:
+            - XForwardedRemoteAddr=192.168.1.1/24
+
+12. Weight：需要两个参数 group 和 weight（int），实现了路由权重功能，按照路由权重选择同一个分组中的路由
+
+    ```yaml
+    spring:
+      cloud:
+        gateway:
+          routes:
+          - id: weight_high
+            uri: https://weighthigh.org
+            predicates:
+            - Weight=group1, 8
+          - id: weight_low
+            uri: https://weightlow.org
+            predicates:
+            - Weight=group1, 2
+
+#### 2.7.6 Filter
+
+> https://docs.spring.io/spring-cloud-gateway/docs/3.1.8/reference/html/#gatewayfilter-factories
+
+Route filters allow the modification of the incoming HTTP request or outgoing HTTP response in some manner. Route filters are scoped to a particular route. Spring Cloud Gateway includes many built-in GatewayFilter Factories.
+路由过滤器允许以某种方式修改传入的 HTTP 请求或传出的 HTTP 响应。路由过滤器的范围仅限于特定路由。Spring Cloud Gateway 包含许多内置的 GatewayFilter Factory。
+
+![img](./images/v2-a77e64e868392ed6770d4e1293e8b328_r.jpg)
+
+过滤器的应用：
+
+- 对于请求报文(header、path、param、body)进行设值、添加、修改、删除、缓存等操作，根据修改的环节又分为请求与响应
+- 对网关流量计数，实现熔断限流功能
+- 设置请求重定向地址
+- 设置请求状态
+- 保存 Session
+- 请求重试
+- 设置请求大小
+- Token 传递
+
+Spring Cloud Gateway 过滤器是最常用的开发方式，支持两种自定义 Filter 模式：`GlobalFilter`、`GatewayFilter`，`GlobalFilter` 是全局过滤器，面向全局生效，`GatewayFilter` 是局部过滤器对于特定的 Route 生效。
+
+**GatewayFilter**
+
+[AddRequestParameter Filter](https://docs.spring.io/spring-cloud-gateway/docs/3.1.8/reference/html/#the-addrequestparameter-gatewayfilter-factory):
+
+```yaml
+spring:
+  cloud:
+    gateway:
+      routes:
+      - id: add_request_parameter_route
+        uri: https://example.org
+        filters:
+        - AddRequestParameter=red, blue
+```
+
+[Default Filters](https://docs.spring.io/spring-cloud-gateway/docs/3.1.8/reference/html/#default-filters)
+
+To add a filter and apply it to all routes, you can use `spring.cloud.gateway.default-filters`. This property takes a list of filters. The following listing defines a set of default filters:
+
+```yaml
+spring:
+  cloud:
+    gateway:
+      default-filters:
+      - AddResponseHeader=X-Response-Default-Red, Default-Blue
+      - PrefixPath=/httpbin
+```
+
+**GlobalFilter**
+
+`ForwardPathFilter.java`:
+
+```java
+/**
+ * Filter to set the path in the request URI if the {@link Route} URI has the scheme
+ * <code>forward</code>.
+ *
+ * @author Ryan Baxter
+ */
+public class ForwardPathFilter implements GlobalFilter, Ordered {
+
+	@Override
+	public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+		Route route = exchange.getAttribute(GATEWAY_ROUTE_ATTR);
+		URI routeUri = route.getUri();
+		String scheme = routeUri.getScheme();
+		if (isAlreadyRouted(exchange) || !"forward".equals(scheme)) {
+			return chain.filter(exchange);
+		}
+		exchange = exchange.mutate().request(exchange.getRequest().mutate().path(routeUri.getPath()).build()).build();
+		return chain.filter(exchange);
+	}
+
+	@Override
+	public int getOrder() {
+		return 0;
+	}
+
+}
+```
+
+`CustomGlobalFilter.java`:
+
+```java
+@Bean
+public GlobalFilter customFilter() {
+    return new CustomGlobalFilter();
+}
+
+public class CustomGlobalFilter implements GlobalFilter, Ordered {
+
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        log.info("custom global filter");
+        return chain.filter(exchange);
+    }
+
+    @Override
+    public int getOrder() {
+        return -1;
+    }
+}
+```
+
+#### 2.7.7 Gateway 优化实践
+
+基于 Spring Cloud Gateway 我们有深入的使用，为了让它能够更好地适应企业级的业务场景需求，我们对它的性能和功能上做了很多优化。
+
+**路由匹配性能优化**
+
+![img](./images/v2-c9b5aabe5976e35e9fb6597bf9a3b36d_r.jpg)
+
+
+
+Spring Cloud Gateway 默认使用**逐个路由匹配**的方式进行路由的查找，对于每一次请求都会逐个匹配路由的断言规则，直到匹配到第一个路由找到调用的目标服务。所以对于在路由非常多的场景，路由的断言匹配严重影响来访问效率。
+
+针对路由断言匹配我们进行来性能优化，首先通过增加 BusyRouteList，采用 MRU 的算法来维护一个最近常用的繁忙队列，将最常用的路由可以快速匹配出来；其次对于路由列表我们增加来按照路由路径进行分组，往往不同路径代表着不同的微服务，路由是路由中最具有区分力的元素，通过按路径分组，可以进一步大大提升查询路由的效率。
+
+**动态路由**
+
+![img](./images/v2-d7f93486fb87d6cf8b6ede4717cf6ed7_r.jpg)
+
+
+
+动态路由作为网关控制分离的重要实现方式，支持集中管理路由规则，弹性扩展实例。我们将网关拆分为 console 的控制面，负责维护管理下发控制策略，broker 数据面负责作为网关接入业务服务执行路由规则。动态路由通过拓展 RouteLocator 组件实现 CachingRouteLocator，允许每个网关实例到“配置中间件”获取路由定义信息，配置中间件可以是 Nacos、Redis、Zookeeper 等。
+
+**弹性架构**
+
+
+
+![img](./images/v2-c97c312b52e32fc9b10b3542d7dba44f_r.jpg)
+
+
+
+针对网关 broker 数据面进行组织分化形成共享微服务网关、专有微服务网关、特性微服务网关，实现企业级业务系统的网关集中化管理，实现网关分布式化，避免单点故障，又满足不同业务系统不同路由策略、协议、业务流量情况的需求，同时以特性微服务网关来提供对 nginx、kong、envoy 的适配。
+
+**服务发现**
+
+服务发现模块拓展 Spring Cloud Gateway 现有的 LoadBalancerClientFilter 实现，通过便携轻量级的 NacosClient、EurekaClient、K8sClient、OpenshiftClient 统一多种注册中心的服务发现模式，并支持灵活配置，通过 GatewayDiscoveryClient 抽象统一返回 ServiceList。
+
+
+
+![img](./images/v2-47e15db5244dbe049addd5bcb98557e6_r.jpg)
+
+
+
+**多协议转换**
+
+协议转换需要将 Gateway 进入的 HTTP 协议进行转换，适配支持 dubbo、webservice、grpc 协议，将协议转换拆分为三个组件来实现，如对于 dubbo 协议由 Http2Dubbo 转换器、DubboInvoker 调用器、DubboWriteResponse 响应适配器组成。
+
+
+
+![img](./images/v2-30448219e4ad9b1b9a20b2c6ddc9fdd8_r.jpg)
+
+
+
+**网关鉴权**
+
+网关在微服务架构中是鉴权的最佳实现方式，具有非侵入易维护的特点。将鉴权可分为 Token 校验、权限验证、数据权限验证、操作记录几步骤，轻松实现业务系统的安全增强。
+
+
+
+![img](./images/v2-c9db11f75a5e8a232cdf365f76a6a41f_r.jpg)
+
+**标准接口定义**
+
+- 接口调试：网关数据面 Broker 代理内部微服务，承接来自外部流量的请求；对于接口调试场景，Console 服务将用户请求翻译成标准 HTTP 格式协议，Broker 实时感知请求并调试目标服务，返回调试结果。
+- 流量录制：对于网关经过的请求，在网关通过请求转换接口定义来获得接口定义录制下来，随后可以随时发起流量回放，用来排查问题，或者自动化测试。
+- 流量复制：对于网关经过的请求，在网关如果开启流量复制策略，则首先将流量转换为接口定义，在下发转发到对应的微服务。
+
+
+
+![img](./images/v2-b2db595d85c882f78279cd8de899e74a_r.jpg)
