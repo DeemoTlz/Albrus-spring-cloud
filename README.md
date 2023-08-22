@@ -2146,6 +2146,16 @@ WebFlux 虽然可以兼容多个底层的通信框架，但是一般情况下，
 
 ![image-20230821201232129](./images/image-20230821201232129.png)
 
+![img](./images/v2-66a600d779a934d750b3da9e7124b8be_r.jpg)
+
+宏观层面
+
+Spring Cloud Gateway 是一款非常好的衔接器。首先是衔接内部网络和外部应用，让所有访问内部网络流量需经过网关的访问控制，统一提供给外部应用，避免不受控的非法访问，增加系统安全性。作为实现内外部的衔接组件，网关首先建立内部微服务纳管的协议，无论协议是否相同，技术栈是否匹配，都可以通过技术手段纳管到网关中。
+
+其次网关与外部微服务也建立起统一的访问协议，来对外提供访问。
+
+在整个访问的过程中，网关核心在于将请求流量由上游发起经过网关到下游的微服务，在流量出入的过程中，网关在路由策略、协议转换、过滤、API 组合等方面构建网关的核心能力。
+
 **工作流程**
 
 ![Spring Cloud Gateway Diagram](./images/spring_cloud_gateway_diagram.png)
@@ -2156,6 +2166,37 @@ Clients make requests to Spring Cloud Gateway. If the Gateway Handler Mapping de
 在 `pre` 过滤上可以做参数校验、权限校验、流量监控、日志输出、协议转换等工作，在 `post` 过滤上可以做响应内容修改、响应头修改、日志输出、流量监控等工作。
 
 ![img](./images/v2-329576f64f83ea76b5def5d945616b02_r.jpg)
+
+以一次请求看 Spring Cloud Gateway 的调用流程：
+
+- `DispatcherHandler`：以 `handle` 方法作为入口
+
+  ```java
+  @Override
+  public Mono<Void> handle(ServerWebExchange exchange) {
+      if (this.handlerMappings == null) {
+          return createNotFoundError();
+      }
+      if (CorsUtils.isPreFlightRequest(exchange.getRequest())) {
+          return handlePreFlight(exchange);
+      }
+      return Flux.fromIterable(this.handlerMappings)
+              // 1. 遍历 HandlerMapping 获取 handler
+              .concatMap(mapping -> mapping.getHandler(exchange))
+              .next()
+              .switchIfEmpty(createNotFoundError())
+              // 2. 遍历 HandlerAdapter 执行 handler
+              .flatMap(handler -> invokeHandler(exchange, handler))
+              // 3. 返回值处理
+              .flatMap(result -> handleResult(exchange, result));
+  }
+  ```
+
+- `RoutePredicateHandlerMapping`：通过 `lookupRoute` 方法，遍历所有路由列表，一个路由一个路由的正则匹配，指导找到第一个可以匹配的 Route 路由，再包装为 `FilteringWebHandler`
+
+- `FilteringWebHandler`：创建过滤器链、按顺序调用 Filter，Filter 又分为 PreFilter 前置过滤器和 PostFilter 后置过滤器
+
+- 整个请求过 ServerWebExchange 作为上下文贯穿启动，对于一次请求的信息从 ServerWebExchange 获取，修改则保存在 ServerWebExchange 中，注意基于 Reactive 特性，ServerWebExchange 是只读的，修改 Exchange 需重新 builder
 
 ==路由转发、执行过滤器链==
 

@@ -1,4 +1,4 @@
-package com.albrus.cloud.config;
+package com.albrus.cloud.gateway.config;
 
 import org.springframework.cloud.gateway.route.RouteLocator;
 import org.springframework.cloud.gateway.route.builder.RouteLocatorBuilder;
