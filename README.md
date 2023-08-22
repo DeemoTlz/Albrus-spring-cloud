@@ -2666,3 +2666,107 @@ Spring Cloud Gateway 默认使用**逐个路由匹配**的方式进行路由的�
 
 
 ![img](./images/v2-b2db595d85c882f78279cd8de899e74a_r.jpg)
+
+### 2.8 Config
+
+> https://spring.io/projects/spring-cloud-config#overview
+>
+> https://docs.spring.io/spring-cloud-config/docs/3.1.8/reference/html/
+
+#### 2.8.1 简介
+
+微服务架构下，每个微服务的粒度相对较小，每个微服务都有一个相应的配置文件，集中式配置管理势在必行！
+
+Spring Cloud Config provides server-side and client-side support for externalized configuration in a distributed system. With the Config Server, you have a central place to manage external properties for applications across all environments. The concepts on both client and server map identically to the Spring `Environment` and `PropertySource` abstractions, so they fit very well with Spring applications but can be used with any application running in any language. As an application moves through the deployment pipeline from dev to test and into production, you can manage the configuration between those environments and be certain that applications have everything they need to run when they migrate. The default implementation of the server storage backend uses git, so it easily supports labelled versions of configuration environments as well as being accessible to a wide range of tooling for managing the content. It is easy to add alternative implementations and plug them in with Spring configuration.
+
+Spring Cloud Config 为微服务架构中的微服务提供**集中化的外部配置支持**，配置服务器为各个不同微服务应用的所有环境提供了一个**中心化**的外部配置。
+Spring Cloud Config 分为服务端和客户端。
+
+![图像](./images/%E5%9B%BE%E5%83%8F.png)
+
+- 服务端也称为**分布式配置中心**，它是一个独立的微服务应用，用来连接配置服务器并为客户端提供获取配置信息，加密/解密信息等访问接口
+
+- 客户端则是通过指定的配置中心来管理应用资源，以及与业务相关的配置内容，并在启动的时候从配置中心获取和加载配置信息。配置服务器默认采用 Git 来存储配置信息，这样就有助于对环境配置进行版本管理，并且可以通过 Git 客户端工具来方便的管理和访问配置内容
+
+#### 2.8.2 服务端
+
+`pom.xml`:
+
+```xml
+<!-- config-server -->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-config-server</artifactId>
+</dependency>
+```
+
+` application.yaml `:
+
+```yaml
+server:
+  port: 3344
+
+spring:
+  application:
+    name: albrus-cloud-config-center  # 服务别名
+  cloud:
+    config:
+      server:
+        git:
+          # uri: git@github.com:DeemoTlz/Albrus-spring-cloud.git  # GitHub 仓库名地址
+          uri: https://github.com/DeemoTlz/Albrus-spring-cloud.git  # GitHub 仓库名地址
+          search-paths:  # 搜索目录
+            - doc/cloud-config-repo
+          default-label: master  # 读取分支
+          skipSslValidation: true
+          username: 
+          password: 
+
+eureka:
+  client:
+    register-with-eureka: true  # 将自己注册到 EurekaServer
+    fetch-registry: true  # 是否从 EurekaServer 抓取已有的注册信息，默认为 true。单节点无所谓，集群必须设置为 true 才能配合 ribbon 使用负载均衡
+    service-url:
+      # defaultZone: http://localhost:7001/eureka/  # 路径包含 /eureka 是因为 EurekaServer 内部有 web 过滤器
+      defaultZone: http://eureka7001.com:7001/eureka/, http://eureka7002.com:7002/eureka/  # 集群配置
+    registry-fetch-interval-seconds: 30  # 隔多久从服务中心拉取一次服务列表，默认 30s
+  instance:
+    # 使用 IP 注册，否则会使用主机注册（此处考虑老版本的兼容，新版本经过实验都是 IP）
+    prefer-ip-address: true
+    # 自定义实例显示格式，加上版本号便于多版本管理，注意是 ip-address，早期版本是 ipaddress
+    instance-id: ${spring.cloud.client.ip-address}:${spring.application.name}:${server.port}:@project.version@
+    # 自定义元数据（key/value 结构）
+    metadata-map:
+      cluster: cll
+      region: rnl
+    lease-renewal-interval-in-seconds: 30  # 租约续约间隔时间，默认 30s
+    lease-expiration-duration-in-seconds: 90  # 租约到期，服务时效时间，默认值 90s，服务超过 90s 没有发⽣⼼跳，EurekaServer 会将服务从列表移除
+```
+
+`AlbrusCloudConfig3344Application.java`:
+
+```java
+@SpringBootApplication
+@EnableConfigServer
+public class AlbrusCloudConfig3344Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(AlbrusCloudConfig3344Application.class, args);
+    }
+
+}
+```
+
+**配置读取规则**
+
+`/{label}/{application}-{profile}.yaml`
+
+- master
+  - http://127.0.0.1:3344/master/config-dev.yaml
+  - http://127.0.0.1:3344/master/config-prod.yaml
+  - http://127.0.0.1:3344/master/config-test.yaml
+- dev
+  - http://127.0.0.1:3344/dev/config-dev.yaml
+  - http://127.0.0.1:3344/dev/config-prod.yaml
+  - http://127.0.0.1:3344/dev/config-test.yaml
+
