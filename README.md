@@ -2770,3 +2770,149 @@ public class AlbrusCloudConfig3344Application {
   - http://127.0.0.1:3344/dev/config-prod.yaml
   - http://127.0.0.1:3344/dev/config-test.yaml
 
+#### 2.8.3 客户端
+
+`pom.xml`:
+
+```xml
+<!-- config-client -->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-config-client</artifactId>
+</dependency>
+```
+
+` bootstrap.yaml `:
+
+```yaml
+server:
+  port: 3355
+
+spring:
+  application:
+    name: albrus-cloud-config-client  # 服务别名
+  cloud:
+    config:
+      uri: http://127.0.0.1:3344  # 配置中心服务端地址
+      label: master  # 分支名称
+      name: cloud-config  # 配置文件名称
+      profile: dev  # 配置文件环境名称
+
+eureka:
+  client:
+    register-with-eureka: true  # 将自己注册到 EurekaServer
+    fetch-registry: true  # 是否从 EurekaServer 抓取已有的注册信息，默认为 true。单节点无所谓，集群必须设置为 true 才能配合 ribbon 使用负载均衡
+    service-url:
+      # defaultZone: http://localhost:7001/eureka/  # 路径包含 /eureka 是因为 EurekaServer 内部有 web 过滤器
+      defaultZone: http://eureka7001.com:7001/eureka/, http://eureka7002.com:7002/eureka/  # 集群配置
+    registry-fetch-interval-seconds: 30  # 隔多久从服务中心拉取一次服务列表，默认 30s
+  instance:
+    # 使用 IP 注册，否则会使用主机注册（此处考虑老版本的兼容，新版本经过实验都是 IP）
+    prefer-ip-address: true
+    # 自定义实例显示格式，加上版本号便于多版本管理，注意是 ip-address，早期版本是 ipaddress
+    instance-id: ${spring.cloud.client.ip-address}:${spring.application.name}:${server.port}:@project.version@
+    # 自定义元数据（key/value 结构）
+    metadata-map:
+      cluster: cll
+      region: rnl
+    lease-renewal-interval-in-seconds: 30  # 租约续约间隔时间，默认 30s
+    lease-expiration-duration-in-seconds: 90  # 租约到期，服务时效时间，默认值 90s，服务超过 90s 没有发⽣⼼跳，EurekaServer 会将服务从列表移除
+```
+
+**关于 `bootstrap.yaml`**:
+
+**`applicaiton.yaml` 是用户级的资源配置项，`bootstrap.yaml` 是系统级的，优先级更高，优先于 `application.yaml` 加载。**
+
+Spring Cloud 会创建一个 Bootstrap Context，作为 Spring 应用的 `Application Context` 的父上下文。初始化时，`Bootstrap Context` 负责从外部源加载配置属性并解析配置。这两个上下文共享一个从外部获取的 `Environment`。
+
+`Bootstrap` 属性有高优先级，默认情况下，它们不会被本地配置覆盖。`Bootstrap Context` 和 `Application Context` 有着不同的约定，所以新增了一个 `bootstrap.yaml` 文件，保证 `Bootstrap Context` 和 `Application Context` 配置分离。
+
+`AlbrusCloudConfig3355Application.java`:
+
+```java
+@SpringBootApplication
+@EnableEurekaClient
+public class AlbrusCloudConfig3355Application {
+
+    public static void main(String[] args) {
+        // http://127.0.0.1:3344/master/cloud-config-dev.yml
+        SpringApplication.run(AlbrusCloudConfig3355Application.class, args);
+    }
+
+}
+```
+
+`ConfigClientController.java`:
+
+```java
+@RestController
+@RequestMapping("/config/client")
+public class ConfigClientController {
+
+    @Value("${config.info}")
+    private String configInfo;
+
+    @GetMapping("/info")
+    public String getConfigInfo() {
+        return this.configInfo;
+    }
+
+}
+```
+
+#### 2.8.4 动态加载
+
+引入 `actuator`：
+
+```xml
+<dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+```
+
+暴露监控端口：
+
+```yaml
+management:  # 暴露监控端口
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+```
+
+`@RefreshScope`:
+
+```java
+@RefreshScope
+@RestController
+@RequestMapping("/config/client")
+public class ConfigClientController {
+
+    @Value("${config.info}")
+    private String configInfo;
+
+    @GetMapping("/info")
+    public String getConfigInfo() {
+        return this.configInfo;
+    }
+
+}
+```
+
+**Refresh**
+
+需要发送 POST 请求：`curl -X POST "http://127.0.0.1:3355/actuator/refresh"`
+
+发 POST 请求，仍然是手动挡，脱裤子放屁呢！
+
+[Push Notifications and Spring Cloud Bus](https://docs.spring.io/spring-cloud-config/docs/3.1.8/reference/html/#_push_notifications_and_spring_cloud_bus)
+
+**Many source code repository providers (such as Github, Gitlab, Gitea, Gitee, Gogs, or Bitbucket) notify you of changes in a repository through a webhook.** You can configure the webhook through the provider’s user interface as a URL and a set of events in which you are interested. For instance, [Github](https://developer.github.com/v3/activity/events/types/#pushevent) uses a POST to the webhook with a JSON body containing a list of commits and a header (`X-Github-Event`) set to `push`. If you add a dependency on the `spring-cloud-config-monitor` library and activate the Spring Cloud Bus in your Config Server, then a `/monitor` endpoint is enabled.
+
+When the webhook is activated, the Config Server sends a `RefreshRemoteApplicationEvent` targeted at the applications it thinks might have changed. The change detection can be strategized. However, by default, it looks for changes in files that match the application name (for example, `foo.properties` is targeted at the `foo` application, while `application.properties` is targeted at all applications). The strategy to use when you want to override the behavior is `PropertyPathNotificationExtractor`, which accepts the request headers and body as parameters and returns a list of file paths that changed.
+
+The default configuration works out of the box with Github, Gitlab, Gitea, Gitee, Gogs or Bitbucket. In addition to the JSON notifications from Github, Gitlab, Gitee, or Bitbucket, you can trigger a change notification by POSTing to `/monitor` with form-encoded body parameters in the pattern of `path={application}`. Doing so broadcasts to applications matching the `{application}` pattern (which can contain wildcards).
+
+**卖个关子，通过 Github 的 Webhook 来广播配置修改消息！**
+
