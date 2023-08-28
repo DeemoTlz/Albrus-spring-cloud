@@ -6,11 +6,11 @@ import org.springframework.cloud.netflix.eureka.EnableEurekaClient;
 
 @SpringBootApplication
 @EnableEurekaClient
-public class AlbrusCloudConfig3355Application {
+public class AlbrusCloudConfigClient3355Application {
 
     public static void main(String[] args) {
         // http://127.0.0.1:3344/master/cloud-config-dev.yml
-        SpringApplication.run(AlbrusCloudConfig3355Application.class, args);
+        SpringApplication.run(AlbrusCloudConfigClient3355Application.class, args);
     }
 
 }

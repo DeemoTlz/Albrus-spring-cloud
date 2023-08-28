@@ -10,6 +10,17 @@ spring:
       label: master  # 分支名称
       name: cloud-config  # 配置文件名称
       profile: dev  # 配置文件环境名称
+  rabbitmq:  # RabbitMQ 相关配置
+    host: localhost
+    port: 5672  # 15672 是 Web 管理界面的端口，5672 是访问的端口
+    username: guest
+    password: guest
+
+management:  # 暴露监控端点
+  endpoints:
+    web:
+      exposure:
+        include: "*"   # 'refresh'
 
 eureka:
   client:

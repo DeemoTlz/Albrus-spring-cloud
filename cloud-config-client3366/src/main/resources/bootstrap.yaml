@@ -1,33 +1,26 @@
 server:
-  port: 3344
+  port: 3366
 
 spring:
   application:
-    name: albrus-cloud-config-center  # 服务别名
+    name: albrus-cloud-config-client  # 服务别名
   cloud:
     config:
-      server:
-        git:
-          # uri: git@github.com:DeemoTlz/Albrus-spring-cloud.git  # GitHub 仓库名地址
-          uri: https://github.com/DeemoTlz/Albrus-spring-cloud.git  # GitHub 仓库名地址
-          search-paths:  # 搜索目录
-            - doc/cloud-config-repo
-          default-label: master  # 读取分支
-          skipSslValidation: true
-          timeout: 30  # 超时时间（秒）
-          username: DeemoTlz
-          password: Qjh9527..
+      uri: http://127.0.0.1:3344  # 配置中心服务端地址
+      label: master  # 分支名称
+      name: cloud-config  # 配置文件名称
+      profile: dev  # 配置文件环境名称
   rabbitmq:  # RabbitMQ 相关配置
     host: localhost
     port: 5672  # 15672 是 Web 管理界面的端口，5672 是访问的端口
     username: guest
     password: guest
 
-management:  # 暴露监控端口
+management:  # 暴露监控端点
   endpoints:
     web:
       exposure:
-        include: "bus-refresh"  # 暴露 bus 刷新配置的端点
+        include: "*"   # 'refresh'
 
 eureka:
   client:

@@ -6,10 +6,10 @@ import org.springframework.cloud.config.server.EnableConfigServer;
 
 @SpringBootApplication
 @EnableConfigServer
-public class AlbrusCloudConfig3344Application {
+public class AlbrusCloudConfigServer3344Application {
 
     public static void main(String[] args) {
-        SpringApplication.run(AlbrusCloudConfig3344Application.class, args);
+        SpringApplication.run(AlbrusCloudConfigServer3344Application.class, args);
     }
 
 }

@@ -9,13 +9,19 @@
         <version>0.0.1</version>
     </parent>
 
-    <artifactId>cloud-config-center3355</artifactId>
+    <artifactId>cloud-config-client3366</artifactId>
 
     <dependencies>
         <!-- config-client -->
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-config-client</artifactId>
+        </dependency>
+
+        <!-- bus RabbitMQ -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-bus-amqp</artifactId>
         </dependency>
 
         <!-- eureka-client -->

@@ -9,13 +9,13 @@
         <version>0.0.1</version>
     </parent>
 
-    <artifactId>cloud-config-center3344</artifactId>
+    <artifactId>cloud-config-client3355</artifactId>
 
     <dependencies>
-        <!-- config-server -->
+        <!-- config-client -->
         <dependency>
             <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-config-server</artifactId>
+            <artifactId>spring-cloud-config-client</artifactId>
         </dependency>
 
         <!-- bus RabbitMQ -->

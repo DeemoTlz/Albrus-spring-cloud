@@ -2667,7 +2667,7 @@ Spring Cloud Gateway 默认使用**逐个路由匹配**的方式进行路由的�
 
 ![img](./images/v2-b2db595d85c882f78279cd8de899e74a_r.jpg)
 
-### 2.8 Config
+### 2.8 Spring Cloud Config
 
 > https://spring.io/projects/spring-cloud-config#overview
 >
@@ -2743,15 +2743,15 @@ eureka:
     lease-expiration-duration-in-seconds: 90  # 租约到期，服务时效时间，默认值 90s，服务超过 90s 没有发⽣⼼跳，EurekaServer 会将服务从列表移除
 ```
 
-`AlbrusCloudConfig3344Application.java`:
+`AlbrusCloudConfigServer3344Application.java`:
 
 ```java
 @SpringBootApplication
 @EnableConfigServer
-public class AlbrusCloudConfig3344Application {
+public class AlbrusCloudConfigServer3344Application {
 
     public static void main(String[] args) {
-        SpringApplication.run(AlbrusCloudConfig3344Application.class, args);
+        SpringApplication.run(AlbrusCloudConfigServer3344Application.class, args);
     }
 
 }
@@ -2827,16 +2827,16 @@ Spring Cloud 会创建一个 Bootstrap Context，作为 Spring 应用的 `Applic
 
 `Bootstrap` 属性有高优先级，默认情况下，它们不会被本地配置覆盖。`Bootstrap Context` 和 `Application Context` 有着不同的约定，所以新增了一个 `bootstrap.yaml` 文件，保证 `Bootstrap Context` 和 `Application Context` 配置分离。
 
-`AlbrusCloudConfig3355Application.java`:
+`AlbrusCloudConfigClient3355Application.java`:
 
 ```java
 @SpringBootApplication
 @EnableEurekaClient
-public class AlbrusCloudConfig3355Application {
+public class AlbrusCloudConfigClient3355Application {
 
     public static void main(String[] args) {
         // http://127.0.0.1:3344/master/cloud-config-dev.yml
-        SpringApplication.run(AlbrusCloudConfig3355Application.class, args);
+        SpringApplication.run(AlbrusCloudConfigClient3355Application.class, args);
     }
 
 }
@@ -2915,4 +2915,169 @@ When the webhook is activated, the Config Server sends a `RefreshRemoteApplicati
 The default configuration works out of the box with Github, Gitlab, Gitea, Gitee, Gogs or Bitbucket. In addition to the JSON notifications from Github, Gitlab, Gitee, or Bitbucket, you can trigger a change notification by POSTing to `/monitor` with form-encoded body parameters in the pattern of `path={application}`. Doing so broadcasts to applications matching the `{application}` pattern (which can contain wildcards).
 
 **卖个关子，通过 Github 的 Webhook 来广播配置修改消息！**
+
+### 2.9 Spring Cloud BUS
+
+#### 2.9.1 简介
+
+> https://spring.io/projects/spring-cloud-bus#overview
+
+分布式**自动刷新配置**功能，配合 Spring Cloud Config 使用可以实现配置的动态刷新。
+
+**什么是总线**
+在微服务架构的系统中，通常会使用**轻量级的消息代理**来构建一个**共用的消息主题**，并让系统中所有微服务实例都连接（订阅）上来。由于该主题中产生的消息会**被所有实例监听和消费，所以称它为消息总线**。在总线上的各个实例，都可以方便地广播一些需要让其他连接在该主题上的实例都知道的消息。
+
+**基本原理**
+Config Client 实例都监听 MQ 中同一个 Topic(默认是 springCloudBus)。当一个服务刷新数据的时候，它会把这个信息放入到 Topic 中，这样其它监听同一 Topic 的服务就能得到通知，然后去更新自身的配置。
+
+#### 2.9.2 设计思想
+
+**设计一**：
+
+![image-20230828184854128](./images/image-20230828184854128.png)
+
+Spring Cloud BUS 将分布式系统中的节点与轻量级消息系统链接起来，整合了 Java 的事件处理机制和消息中间件的功能。目前仅支持 RabbitMQ 和 Kafka。
+
+利用消息总线触发一个客户端 `/bus/refresh` 而刷新所有客户端的配置。
+
+**管理、传播分布式系统之间的消息**（广播状态更改、事件推送、通信）
+
+**设计二**：
+
+![图像](./images/%E5%9B%BE%E5%83%8F-1693220274491-1.png)
+
+利用消息总线触发一个服务端 Config Server 的 `/bus/refresh` 而刷新所有客户端的配置。
+
+**设计二更合理**：
+
+- 设计一打破了微服务的单一职责，本身是业务模块，不应该承担配置刷新的职责
+- 破坏了微服务之间各节点的对等性
+- 有一定的局限性，例如微服务迁移时，网络地址通常会发生变化，此时如果想要做到自动刷新，需要增加更多的修改
+
+#### 2.9.3 服务端
+
+`pom.xml`:
+
+```xml
+<!-- bus RabbitMQ -->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-bus-amqp</artifactId>
+</dependency>
+```
+
+` application.yaml `:
+
+```yaml
+server:
+  port: 3344
+
+spring:
+  application:
+    name: albrus-cloud-config-center  # 服务别名
+  cloud:
+    config:
+      server:
+        git:
+          # uri: git@github.com:DeemoTlz/Albrus-spring-cloud.git  # GitHub 仓库名地址
+          uri: https://github.com/DeemoTlz/Albrus-spring-cloud.git  # GitHub 仓库名地址
+          search-paths:  # 搜索目录
+            - doc/cloud-config-repo
+          default-label: master  # 读取分支
+          skipSslValidation: true
+          timeout: 30  # 超时时间（秒）
+          username: DeemoTlz
+          password: Qjh9527..
+  rabbitmq:  # RabbitMQ 相关配置
+    host: localhost
+    port: 5672  # 15672 是 Web 管理界面的端口，5672 是访问的端口
+    username: guest
+    password: guest
+
+management:  # 暴露监控端口
+  endpoints:
+    web:
+      exposure:
+        include: "bus-refresh"  # 暴露 bus 刷新配置的端点
+
+eureka:
+  client:
+    register-with-eureka: true  # 将自己注册到 EurekaServer
+    fetch-registry: true  # 是否从 EurekaServer 抓取已有的注册信息，默认为 true。单节点无所谓，集群必须设置为 true 才能配合 ribbon 使用负载均衡
+    service-url:
+      # defaultZone: http://localhost:7001/eureka/  # 路径包含 /eureka 是因为 EurekaServer 内部有 web 过滤器
+      defaultZone: http://eureka7001.com:7001/eureka/, http://eureka7002.com:7002/eureka/  # 集群配置
+    registry-fetch-interval-seconds: 30  # 隔多久从服务中心拉取一次服务列表，默认 30s
+  instance:
+    # 使用 IP 注册，否则会使用主机注册（此处考虑老版本的兼容，新版本经过实验都是 IP）
+    prefer-ip-address: true
+    # 自定义实例显示格式，加上版本号便于多版本管理，注意是 ip-address，早期版本是 ipaddress
+    instance-id: ${spring.cloud.client.ip-address}:${spring.application.name}:${server.port}:@project.version@
+    # 自定义元数据（key/value 结构）
+    metadata-map:
+      cluster: cll
+      region: rnl
+    lease-renewal-interval-in-seconds: 30  # 租约续约间隔时间，默认 30s
+    lease-expiration-duration-in-seconds: 90  # 租约到期，服务时效时间，默认值 90s，服务超过 90s 没有发⽣⼼跳，EurekaServer 会将服务从列表移除
+```
+
+#### 2.9.4 客户端
+
+`pom.xml`:
+
+```xml
+<!-- bus RabbitMQ -->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-bus-amqp</artifactId>
+</dependency>
+```
+
+` bootstrap.yaml `:
+
+```yaml
+server:
+  port: 3355/3366
+
+spring:
+  application:
+    name: albrus-cloud-config-client  # 服务别名
+  cloud:
+    config:
+      uri: http://127.0.0.1:3344  # 配置中心服务端地址
+      label: master  # 分支名称
+      name: cloud-config  # 配置文件名称
+      profile: dev  # 配置文件环境名称
+  rabbitmq:  # RabbitMQ 相关配置
+    host: localhost
+    port: 5672  # 15672 是 Web 管理界面的端口，5672 是访问的端口
+    username: guest
+    password: guest
+
+management:  # 暴露监控端点
+  endpoints:
+    web:
+      exposure:
+        include: "*"   # 'refresh'
+
+eureka:
+  client:
+    register-with-eureka: true  # 将自己注册到 EurekaServer
+    fetch-registry: true  # 是否从 EurekaServer 抓取已有的注册信息，默认为 true。单节点无所谓，集群必须设置为 true 才能配合 ribbon 使用负载均衡
+    service-url:
+      # defaultZone: http://localhost:7001/eureka/  # 路径包含 /eureka 是因为 EurekaServer 内部有 web 过滤器
+      defaultZone: http://eureka7001.com:7001/eureka/, http://eureka7002.com:7002/eureka/  # 集群配置
+    registry-fetch-interval-seconds: 30  # 隔多久从服务中心拉取一次服务列表，默认 30s
+  instance:
+    # 使用 IP 注册，否则会使用主机注册（此处考虑老版本的兼容，新版本经过实验都是 IP）
+    prefer-ip-address: true
+    # 自定义实例显示格式，加上版本号便于多版本管理，注意是 ip-address，早期版本是 ipaddress
+    instance-id: ${spring.cloud.client.ip-address}:${spring.application.name}:${server.port}:@project.version@
+    # 自定义元数据（key/value 结构）
+    metadata-map:
+      cluster: cll
+      region: rnl
+    lease-renewal-interval-in-seconds: 30  # 租约续约间隔时间，默认 30s
+    lease-expiration-duration-in-seconds: 90  # 租约到期，服务时效时间，默认值 90s，服务超过 90s 没有发⽣⼼跳，EurekaServer 会将服务从列表移除
+```
 
