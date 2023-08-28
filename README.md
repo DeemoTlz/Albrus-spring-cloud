@@ -2916,7 +2916,7 @@ The default configuration works out of the box with Github, Gitlab, Gitea, Gitee
 
 **卖个关子，通过 Github 的 Webhook 来广播配置修改消息！**
 
-### 2.9 Spring Cloud BUS
+### 2.9 Spring Cloud Bus
 
 #### 2.9.1 简介
 
@@ -2936,7 +2936,7 @@ Config Client 实例都监听 MQ 中同一个 Topic(默认是 springCloudBus)。
 
 ![image-20230828184854128](./images/image-20230828184854128.png)
 
-Spring Cloud BUS 将分布式系统中的节点与轻量级消息系统链接起来，整合了 Java 的事件处理机制和消息中间件的功能。目前仅支持 RabbitMQ 和 Kafka。
+Spring Cloud Bus 将分布式系统中的节点与轻量级消息系统链接起来，整合了 Java 的事件处理机制和消息中间件的功能。目前仅支持 RabbitMQ 和 Kafka。
 
 利用消息总线触发一个客户端 `/bus/refresh` 而刷新所有客户端的配置。
 
@@ -2954,7 +2954,9 @@ Spring Cloud BUS 将分布式系统中的节点与轻量级消息系统链接起
 - 破坏了微服务之间各节点的对等性
 - 有一定的局限性，例如微服务迁移时，网络地址通常会发生变化，此时如果想要做到自动刷新，需要增加更多的修改
 
-#### 2.9.3 服务端
+#### 2.9.3 全局广播
+
+##### 2.9.3.1 服务端
 
 `pom.xml`:
 
@@ -3021,7 +3023,7 @@ eureka:
     lease-expiration-duration-in-seconds: 90  # 租约到期，服务时效时间，默认值 90s，服务超过 90s 没有发⽣⼼跳，EurekaServer 会将服务从列表移除
 ```
 
-#### 2.9.4 客户端
+##### 2.9.3.2 客户端
 
 `pom.xml`:
 
@@ -3080,4 +3082,29 @@ eureka:
     lease-renewal-interval-in-seconds: 30  # 租约续约间隔时间，默认 30s
     lease-expiration-duration-in-seconds: 90  # 租约到期，服务时效时间，默认值 90s，服务超过 90s 没有发⽣⼼跳，EurekaServer 会将服务从列表移除
 ```
+
+##### 2.9.3.3 Config Server
+
+```bash
+curl -X POST "http://127.0.0.1:3344/actuator/bus-refresh"
+```
+
+#### 2.9.4 定点刷新
+
+**Config Server**:
+
+```bash
+# http://127.0.0.1:port/actuator/bus-refresh/{destination}
+curl -X POST "http://127.0.0.1:3344/actuator/bus-refresh/albrus-cloud-config-client:3355"
+```
+
+![image-20230828193134442](./images/image-20230828193134442.png)
+
+1. Spring Cloud Config Server + Spring Cloud Bus 从配置服务器获取配置
+2. Spring Cloud Config Client 订阅 RabbitMQ、从 Spring Cloud Config Server 获取配置
+3. push 最新配置到配置服务器
+4. 配置服务器 Webhook POST /monitor 到 Spring Cloud Config Server + Spring Cloud Bus
+5. Spring Cloud Config Server + Spring Cloud Bus 发送刷新配置消息到 RabbitMQ
+6. 订阅了 RabbitMQ 的 Spring Cloud Config Client 收到消息
+7. Spring Cloud Config Client 从配置服务器获取最新配置
 
