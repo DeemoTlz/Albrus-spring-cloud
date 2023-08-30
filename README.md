@@ -2989,7 +2989,7 @@ spring:
           skipSslValidation: true
           timeout: 30  # 超时时间（秒）
           username: DeemoTlz
-          password: Qjh9527..
+          password: 
   rabbitmq:  # RabbitMQ 相关配置
     host: localhost
     port: 5672  # 15672 是 Web 管理界面的端口，5672 是访问的端口
@@ -3107,4 +3107,504 @@ curl -X POST "http://127.0.0.1:3344/actuator/bus-refresh/albrus-cloud-config-cli
 5. Spring Cloud Config Server + Spring Cloud Bus 发送刷新配置消息到 RabbitMQ
 6. 订阅了 RabbitMQ 的 Spring Cloud Config Client 收到消息
 7. Spring Cloud Config Client 从配置服务器获取最新配置
+
+### 2.10 Stream
+
+市面上存在的消息中间件：ActiveMQ、RabbitMQ、RocketMQ、Kafka...，那么有没有一种类似与 XxxxTemplate、JDBC 这样的技术，让技术人员从此不再关注 MQ 的具体实现细节，只需要关心上层的适配绑定就能够自动的进行 MQ 切换？
+
+**屏蔽底层消息中间件的差异，降低切换成本，统一消息的编程模型。**
+
+#### 2.10.1 简介
+
+> https://spring.io/projects/spring-cloud-stream
+>
+> https://docs.spring.io/spring-cloud-stream/docs/3.2.9/reference/html/
+
+Spring Cloud Stream is a framework for building highly scalable event-driven microservices connected with shared messaging systems.
+Spring Cloud Stream 是一个用于构建与共享消息系统连接的高度可扩展的事件驱动微服务的框架。
+
+The framework provides a flexible programming model built on already established and familiar Spring idioms and best practices, including support for persistent pub/sub semantics, consumer groups, and stateful partitions.
+该框架提供了一个灵活的编程模型，该模型建立在已经建立的、熟悉的 Spring 习惯用法和最佳实践的基础上，包括对持久发布/订阅语义、消费者组和有状态分区的支持。
+
+**Binder Implementations**
+
+Spring Cloud Stream supports a variety of binder implementations and the following table includes the link to the GitHub projects.
+
+- [RabbitMQ](https://github.com/spring-cloud/spring-cloud-stream-binder-rabbit)
+- [Apache Kafka](https://github.com/spring-cloud/spring-cloud-stream-binder-kafka)
+- [Kafka Streams](https://github.com/spring-cloud/spring-cloud-stream-binder-kafka/tree/master/spring-cloud-stream-binder-kafka-streams)
+- [Amazon Kinesis](https://github.com/spring-cloud/spring-cloud-stream-binder-aws-kinesis)
+- [Google PubSub *(partner maintained)*](https://github.com/spring-cloud/spring-cloud-gcp/tree/master/spring-cloud-gcp-pubsub-stream-binder)
+- [Solace PubSub+ *(partner maintained)*](https://github.com/SolaceProducts/spring-cloud-stream-binder-solace)
+- [Azure Event Hubs *(partner maintained)*](https://github.com/Azure/azure-sdk-for-java/tree/main/sdk/spring/spring-cloud-azure-stream-binder-eventhubs)
+- [Azure Service Bus *(partner maintained)*](https://github.com/Azure/azure-sdk-for-java/tree/main/sdk/spring/spring-cloud-azure-stream-binder-servicebus)
+- [AWS SQS *(partner maintained)*](https://github.com/idealo/spring-cloud-stream-binder-sqs)
+- [AWS SNS *(partner maintained)*](https://github.com/idealo/spring-cloud-stream-binder-sns)
+- [Apache RocketMQ *(partner maintained)*](https://github.com/alibaba/spring-cloud-alibaba/wiki/RocketMQ-en)
+
+![SCSt overview](./images/SCSt-overview.png)
+
+The core building blocks of Spring Cloud Stream are:
+
+- **Destination Binders**: Components responsible to provide integration with the external messaging systems.
+  **目标绑定器**：负责提供与外部消息传递系统集成的组件。
+- **Destination Bindings**: Bridge between the external messaging systems and application code (producer/consumer) provided by the end user.
+  **目标绑定**：外部消息传递系统和最终用户提供的应用程序代码（生产者/消费者）之间的桥梁。
+- **Message**: The canonical data structure used by producers and consumers to communicate with Destination Binders (and thus other applications via external messaging systems).
+  **消息**：生产者和消费者使用的规范数据结构与目标绑定器（以及通过外部消息系统的其他应用程序）进行通信。
+
+#### 2.10.2 设计思想
+
+![SCSt with binder](./images/SCSt-with-binder.png)
+
+- **Binder**: 通过定义绑定器 Binder 作为中间层，实现了应用程序与消息中间件细节之间的隔离
+- **INPUT**: 对应于消费者
+- **OUTPUT**: 对应于生产者
+
+#### 2.10.3 定时驱动的消息队列
+
+> https://docs.spring.io/spring-cloud-stream/docs/3.2.9/reference/html/spring-cloud-stream.html#_suppliers_sources
+>
+> In other words, the above configuration produces a single message **==every second==** and each message is sent to an `output` destination that is exposed by the binder.
+>
+> ~~`@EnableBinding`~~ Deprecated as of 3.1 in favor of functional programming model.
+
+##### 2.10.3.1 生产者
+
+`pom.xml`:
+
+```xml
+<!-- stream-rabbit -->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-stream-rabbit</artifactId>
+</dependency>
+```
+
+`application.yaml`:
+
+```yaml
+server:
+  port: 8801
+
+spring:
+  application:
+    name: albrus-cloud-stream-provider  # 服务别名
+  rabbitmq:
+    host: 127.0.0.1
+    username: guest
+    password: guest
+  cloud:
+    stream:
+      bindings: # 服务的整合处理
+        albrusSend-out-0: # 这个名字是一个通道的名称
+          destination: studyExchange
+          content-type: application/json # 设置消息类型，本次为 json，文本则设置 text/plain
+    function:
+      definition: albrusSend
+
+eureka:
+  client:
+    register-with-eureka: true  # 将自己注册到 EurekaServer
+    fetch-registry: true  # 是否从 EurekaServer 抓取已有的注册信息，默认为 true。单节点无所谓，集群必须设置为 true 才能配合 ribbon 使用负载均衡
+    service-url:
+      # defaultZone: http://localhost:7001/eureka/  # 路径包含 /eureka 是因为 EurekaServer 内部有 web 过滤器
+      defaultZone: http://eureka7001.com:7001/eureka/, http://eureka7002.com:7002/eureka/  # 集群配置
+    registry-fetch-interval-seconds: 30  # 隔多久从服务中心拉取一次服务列表，默认 30s
+  instance:
+    # 使用 IP 注册，否则会使用主机注册（此处考虑老版本的兼容，新版本经过实验都是 IP）
+    prefer-ip-address: true
+    # 自定义实例显示格式，加上版本号便于多版本管理，注意是 ip-address，早期版本是 ipaddress
+    instance-id: ${spring.cloud.client.ip-address}:${spring.application.name}:${server.port}:@project.version@
+    # 自定义元数据（key/value 结构）
+    metadata-map:
+      cluster: cll
+      region: rnl
+    lease-renewal-interval-in-seconds: 30  # 租约续约间隔时间，默认 30s
+    lease-expiration-duration-in-seconds: 90  # 租约到期，服务时效时间，默认值 90s，服务超过 90s 没有发⽣⼼跳，EurekaServer 会将服务从列表移除
+```
+
+`AlbrusCloudStreamProvider8801Application.java`:
+
+```java
+@SpringBootApplication
+public class AlbrusCloudStreamProvider8801Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(AlbrusCloudStreamProvider8801Application.class, args);
+    }
+
+}
+```
+
+`AlbrusMessageProvider.java`:
+
+```java
+@Component
+public class AlbrusMessageProvider {
+
+    @Bean
+    public Supplier<String> albrusSend() {
+        return () -> UUID.randomUUID().toString();
+    }
+
+}
+```
+
+##### 2.10.3.2 消费者
+
+`pom.xml`:
+
+```xml
+<!-- stream-rabbit -->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-stream-rabbit</artifactId>
+</dependency>
+```
+
+`application.yaml`:
+
+```yaml
+server:
+  port: 8803
+
+spring:
+  application:
+    name: albrus-cloud-stream-consumer  # 服务别名
+  rabbitmq:
+    host: 127.0.0.1
+    username: guest
+    password: guest
+  cloud:
+    stream:
+      bindings: # 服务的整合处理
+        albrusSink-in-0: # 这个名字是一个通道的名称
+          destination: studyExchange
+          content-type: application/json # 设置消息类型，本次为 json，文本则设置 text/plain
+          consumer: # 配置重试次数（本机重试）
+            max-attempts: 3 # 次数等于 1 ，相当于不重试
+    function:
+      definition: albrusSink
+
+eureka:
+  client:
+    register-with-eureka: true  # 将自己注册到 EurekaServer
+    fetch-registry: true  # 是否从 EurekaServer 抓取已有的注册信息，默认为 true。单节点无所谓，集群必须设置为 true 才能配合 ribbon 使用负载均衡
+    service-url:
+      # defaultZone: http://localhost:7001/eureka/  # 路径包含 /eureka 是因为 EurekaServer 内部有 web 过滤器
+      defaultZone: http://eureka7001.com:7001/eureka/, http://eureka7002.com:7002/eureka/  # 集群配置
+    registry-fetch-interval-seconds: 30  # 隔多久从服务中心拉取一次服务列表，默认 30s
+  instance:
+    # 使用 IP 注册，否则会使用主机注册（此处考虑老版本的兼容，新版本经过实验都是 IP）
+    prefer-ip-address: true
+    # 自定义实例显示格式，加上版本号便于多版本管理，注意是 ip-address，早期版本是 ipaddress
+    instance-id: ${spring.cloud.client.ip-address}:${spring.application.name}:${server.port}:@project.version@
+    # 自定义元数据（key/value 结构）
+    metadata-map:
+      cluster: cll
+      region: rnl
+    lease-renewal-interval-in-seconds: 30  # 租约续约间隔时间，默认 30s
+    lease-expiration-duration-in-seconds: 90  # 租约到期，服务时效时间，默认值 90s，服务超过 90s 没有发⽣⼼跳，EurekaServer 会将服务从列表移除
+```
+
+`AlbrusCloudStreamConsumer8803Application.java`:
+
+```java
+@SpringBootApplication
+public class AlbrusCloudStreamConsumer8803Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(AlbrusCloudStreamConsumer8803Application.class, args);
+    }
+
+}
+```
+
+`AlbrusConsumer.java`:
+
+```java
+@Component
+public class AlbrusConsumer {
+
+    @Bean
+    public Consumer<String> albrusSink() {
+        return System.out::println;
+    }
+
+}
+```
+
+##### 2.10.3.3 Functional binding names
+
+Unlike the explicit naming required by annotation-based support (legacy) used in the previous versions of spring-cloud-stream, the functional programming model defaults to a simple convention when it comes to binding names, thus greatly simplifying application configuration. Let’s look at the first example:
+
+```java
+@SpringBootApplication
+public class SampleApplication {
+
+	@Bean
+	public Function<String, String> uppercase() {
+	    return value -> value.toUpperCase();
+	}
+}
+```
+
+In the preceding example we have an application with a single function which acts as message handler. As a `Function` it has an input and output. The naming convention used to name input and output bindings is as follows:
+
+- input - `<functionName> + -in- + <index>`
+- output - `<functionName> + -out- + <index>`
+
+The `in` and `out` corresponds to the type of binding (such as *input* or *output*). The `index` is the index of the input or output binding. It is always 0 for typical single input/output function, so it’s only relevant for [Functions with multiple input and output arguments](https://docs.spring.io/spring-cloud-stream/docs/3.2.9/reference/html/spring-cloud-stream.html#_functions_with_multiple_input_and_output_arguments).
+
+So if for example you would want to map the input of this function to a remote destination (e.g., topic, queue etc) called "my-topic" you would do so with the following property:
+
+```
+--spring.cloud.stream.bindings.uppercase-in-0.destination=my-topic
+```
+
+Note how `uppercase-in-0` is used as a segment in property name. The same goes for `uppercase-out-0`.
+
+#### 2.10.4 StreamBridge
+
+在实际生产环境中，更多的是由业务场景触发消息生产。
+
+> https://docs.spring.io/spring-cloud-stream/docs/3.2.9/reference/html/spring-cloud-stream.html#_sending_arbitrary_data_to_an_output_e_g_foreign_event_driven_sources
+
+There are cases where the actual source of data may be coming from the external (foreign) system that is not a binder. For example, the source of the data may be a classic REST endpoint. How do we bridge such source with the functional mechanism used by spring-cloud-stream?
+在某些情况下，实际数据源可能来自非绑定器的外部（外部）系统。例如，数据源可能是经典的 REST 端点。我们如何将这样的源与 spring-cloud-stream 使用的功能机制联系起来？
+
+**官方示例**
+
+Here, for both samples we’ll use a standard MVC endpoint method called `delegateToSupplier` bound to the root web context, delegating incoming requests to stream via **StreamBridge** mechanism.
+
+```java
+@SpringBootApplication
+@Controller
+public class WebSourceApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(WebSourceApplication.class, "--spring.cloud.stream.source=toStream");
+	}
+
+	@Autowired
+	private StreamBridge streamBridge;
+
+	@RequestMapping
+	@ResponseStatus(HttpStatus.ACCEPTED)
+	public void delegateToSupplier(@RequestBody String body) {
+		System.out.println("Sending " + body);
+		streamBridge.send("toStream-out-0", body);
+	}
+}
+```
+
+Here we autowire a `StreamBridge` bean which allows us to send data to an output binding effectively bridging non-stream application with spring-cloud-stream. Note that preceding example does not have any source functions defined (e.g., Supplier bean) leaving the framework with no trigger to create source bindings in advance, which would be typical for cases where configuration contains function beans. And that is fine, since `StreamBridge` will initiate creation of output bindings (as well as destination auto-provisioning if necessary) for non existing bindings on the first call to its `send(..)` operation caching it for subsequent reuse (see [StreamBridge and Dynamic Destinations](https://docs.spring.io/spring-cloud-stream/docs/3.2.9/reference/html/spring-cloud-stream.html#_streambridge_and_dynamic_destinations) for more details).
+
+However, if you want to pre-create an output binding at the initialization (startup) time you can benefit from `spring.cloud.stream.source` property where you can declare the name of your sources. The provided name will be used as a trigger to create a source binding. So in the preceding example the name of the output binding will be `toStream-out-0` which is consistent with the binding naming convention used by functions (see [Binding and Binding names](https://docs.spring.io/spring-cloud-stream/docs/3.2.9/reference/html/spring-cloud-stream.html#_binding_and_binding_names)). You can use `;` to signify multiple sources (multiple output bindings) (e.g., `--spring.cloud.stream.source=foo;bar`)
+
+Also, note that `streamBridge.send(..)` method takes an `Object` for data. This means you can send POJO or `Message` to it and it will go through the same routine when sending output as if it was from any Function or Supplier providing the same level of consistency as with functions. This means the output type conversion, partitioning etc are honored as if it was from the output produced by functions.
+
+##### 2.10.4.1 生产者
+
+`SendMessageController.java`:
+
+```java
+@Slf4j
+@RestController
+@RequestMapping("/stream")
+public class SendMessageController {
+
+    @Resource
+    private StreamBridge streamBridge;
+
+    @PostMapping(value = "/message1")
+    public String sendMessage1() {
+        Random random = new Random();
+        // [0, 100)
+        int ranNum = random.nextInt(100);
+        String message = "老猪猪 - " + ranNum;
+        streamBridge.send("albrusSend1-out-0", message);
+
+        return message;
+    }
+
+    @PostMapping(value = "/message2")
+    public String sendMessage2() {
+        Random random = new Random();
+        // [0, 100)
+        int ranNum = random.nextInt(100);
+        String message = "老鸡屎 - " + ranNum;
+        streamBridge.send("albrusSend2-out-0", message);
+
+        return message;
+    }
+
+}
+```
+
+`application.yaml`:
+
+```yaml
+spring:
+  cloud:
+    stream:
+      bindings: # 服务的整合处理
+        albrusSend1-out-0: # 这个名字是一个通道的名称
+          destination: studyExchange1
+          content-type: application/json # 设置消息类型，本次为 json，文本则设置 text/plain
+        albrusSend2-out-0: # 这个名字是一个通道的名称
+          destination: studyExchange2
+          content-type: application/json # 设置消息类型，本次为 json，文本则设置 text/plain
+    function:
+      definition: albrusSend1;albrusSend2
+```
+
+##### 2.10.4.2 消费者
+
+`AlbrusConsumer.java`:
+
+```java
+@Component
+public class AlbrusConsumer {
+
+    @Bean
+    public Consumer<String> albrusSink1() {
+        return System.out::println;
+    }
+
+    @Bean
+    public Consumer<String> albrusSink2() {
+        return System.out::println;
+    }
+
+}
+```
+
+`application.yaml`:
+
+```yaml
+spring:
+  cloud:
+    stream:
+      bindings: # 服务的整合处理
+        albrusSink-in-0: # 这个名字是一个通道的名称
+          destination: studyExchange
+          content-type: application/json # 设置消息类型，本次为 json，文本则设置 text/plain
+        albrusSink1-in-0: # 这个名字是一个通道的名称
+          destination: studyExchange1
+          content-type: application/json # 设置消息类型，本次为 json，文本则设置 text/plain
+        albrusSink2-in-0: # 这个名字是一个通道的名称
+          destination: studyExchange2
+          content-type: application/json # 设置消息类型，本次为 json，文本则设置 text/plain
+    function:
+      definition: albrusSink;albrusSink1;albrusSink2
+```
+
+#### 2.10.5 消息重试 && 死信队列
+
+##### 2.10.5.1 生产者
+
+`application.yaml`:
+
+```yaml
+spring:
+  cloud:
+    stream:
+      bindings: # 服务的整合处理
+        albrusSend-out-0: # 这个名字是一个通道的名称
+          destination: studyExchange
+          content-type: application/json # 设置消息类型，本次为 json，文本则设置 text/plain
+        albrusSend1-out-0: # 这个名字是一个通道的名称
+          destination: studyExchange1
+          content-type: application/json # 设置消息类型，本次为 json，文本则设置 text/plain
+        albrusSend2-out-0: # 这个名字是一个通道的名称
+          destination: studyExchange2
+          content-type: application/json # 设置消息类型，本次为 json，文本则设置 text/plain
+      rabbit:
+        bindings:
+          albrusSend1-out-0:
+            producer:
+              autoBindDlq: true # 自动绑定死信队列，会自动创建一个默认的死信队列
+    function:
+      definition: albrusSend;albrusSend1;albrusSend2
+```
+
+##### 2.10.5.2 消费者
+
+```yaml
+spring:
+  cloud:
+    stream:
+      bindings: # 服务的整合处理
+        albrusSink-in-0: # 这个名字是一个通道的名称
+          destination: studyExchange
+          content-type: application/json # 设置消息类型，本次为 json，文本则设置 text/plain
+          group: group-studyExchange
+          consumer: # 配置重试次数（本机重试）
+              max-attempts: 3 # 次数等于 1 ，相当于不重试
+        albrusSink1-in-0: # 这个名字是一个通道的名称
+          destination: studyExchange1
+          content-type: application/json # 设置消息类型，本次为 json，文本则设置 text/plain
+          group: group-studyExchange1
+          consumer: # 配置重试次数（本机重试）
+            max-attempts: 3 # 次数等于 1 ，相当于不重试
+        albrusSink2-in-0: # 这个名字是一个通道的名称
+          destination: studyExchange2
+          content-type: application/json # 设置消息类型，本次为 json，文本则设置 text/plain
+          group: group-studyExchange2
+          consumer: # 配置重试次数（本机重试）
+            max-attempts: 3 # 次数等于 1 ，相当于不重试
+      rabbit:
+        bindings:
+          albrusSink1-in-0: # 死信队列
+            consumer:
+              autoBindDlq: true # 自动绑定死信队列，会自动创建一个默认的死信队列
+    function:
+      definition: albrusSink;albrusSink1;albrusSink2
+```
+
+#### 2.10.6 重复消费 && 消息持久化
+
+多个消费实例消费同一个主题出现的重复消费。
+
+**分组，消费节点分组后自带持久化功能**
+
+微服务应用放置于同一个 group 中，就能够保证消息只会被其中一个应用消费一次。
+**不同的组是可以全面消费的（重复消费），同一个组内会发生竞争关系，只有其中一个可以消费**。
+
+![image-20230830214102182](./images/image-20230830214102182.png)
+
+`application.yaml`:
+
+```yaml
+spring:
+  cloud:
+    stream:
+      bindings: # 服务的整合处理
+        albrusSink-in-0: # 这个名字是一个通道的名称
+          destination: studyExchange
+          content-type: application/json # 设置消息类型，本次为 json，文本则设置 text/plain
+          group: group-studyExchange
+          consumer: # 配置重试次数（本机重试）
+              max-attempts: 3 # 次数等于 1 ，相当于不重试
+        albrusSink1-in-0: # 这个名字是一个通道的名称
+          destination: studyExchange1
+          content-type: application/json # 设置消息类型，本次为 json，文本则设置 text/plain
+          group: group-studyExchange1
+          consumer: # 配置重试次数（本机重试）
+            max-attempts: 3 # 次数等于 1 ，相当于不重试
+        albrusSink2-in-0: # 这个名字是一个通道的名称
+          destination: studyExchange2
+          content-type: application/json # 设置消息类型，本次为 json，文本则设置 text/plain
+          group: group-studyExchange2
+          consumer: # 配置重试次数（本机重试）
+            max-attempts: 3 # 次数等于 1 ，相当于不重试
+    function:
+      definition: albrusSink;albrusSink1;albrusSink2
+```
+
+**`group: group-studyExchange`**
+
+
 

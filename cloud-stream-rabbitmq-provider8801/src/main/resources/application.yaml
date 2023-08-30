@@ -1,33 +1,32 @@
 server:
-  port: 3344
+  port: 8801
 
 spring:
   application:
-    name: albrus-cloud-config-center  # 服务别名
-  cloud:
-    config:
-      server:
-        git:
-          # uri: git@github.com:DeemoTlz/Albrus-spring-cloud.git  # GitHub 仓库名地址
-          uri: https://github.com/DeemoTlz/Albrus-spring-cloud.git  # GitHub 仓库名地址
-          search-paths:  # 搜索目录
-            - doc/cloud-config-repo
-          default-label: master  # 读取分支
-          skipSslValidation: true
-          timeout: 30  # 超时时间（秒）
-          username: DeemoTlz
-          password:
-  rabbitmq:  # RabbitMQ 相关配置
-    host: localhost
-    port: 5672  # 15672 是 Web 管理界面的端口，5672 是访问的端口
+    name: albrus-cloud-stream-provider  # 服务别名
+  rabbitmq:
+    host: 127.0.0.1
     username: guest
     password: guest
-
-management:  # 暴露监控端口
-  endpoints:
-    web:
-      exposure:
-        include: "bus-refresh"  # 暴露 bus 刷新配置的端点
+  cloud:
+    stream:
+      bindings: # 服务的整合处理
+        albrusSend-out-0: # 这个名字是一个通道的名称
+          destination: studyExchange
+          content-type: application/json # 设置消息类型，本次为 json，文本则设置 text/plain
+        albrusSend1-out-0: # 这个名字是一个通道的名称
+          destination: studyExchange1
+          content-type: application/json # 设置消息类型，本次为 json，文本则设置 text/plain
+        albrusSend2-out-0: # 这个名字是一个通道的名称
+          destination: studyExchange2
+          content-type: application/json # 设置消息类型，本次为 json，文本则设置 text/plain
+      rabbit:
+        bindings:
+          albrusSend1-out-0:
+            producer:
+              autoBindDlq: true # 自动绑定死信队列，会自动创建一个默认的死信队列
+    function:
+      definition: albrusSend;albrusSend1;albrusSend2
 
 eureka:
   client:
