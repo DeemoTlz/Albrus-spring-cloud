@@ -3606,5 +3606,75 @@ spring:
 
 **`group: group-studyExchange`**
 
+### 2.11 Sleuth
 
+==Spring Cloud Sleuth will not work with Spring Boot 3.x onward. The last major version of Spring Boot that Sleuth will support is 2.x.==
+
+#### 2.11.1 简介
+
+> https://spring.io/projects/spring-cloud-sleuth
+>
+> https://docs.spring.io/spring-cloud-sleuth/docs/3.0.4/reference/html/
+
+服务链路调用跟踪，与 Zipkin 搭配为分布式系统提供链路追踪解决方案。
+
+一条链路通过 Trace Id 唯一标识，Span 标识发起的请求信息，各 Span 通过 parent Id 关联起来：
+
+**术语**
+
+**Span**: The basic unit of work. For example, sending an RPC is a new span, as is sending a response to an RPC. Spans also have other data, such as descriptions, timestamped events, key-value annotations (tags), the ID of the span that caused them, and process IDs (normally IP addresses).
+**Span**: 工作的基本单位。例如，发送 RPC 是一个新的 Span，发送对 RPC 的响应也是如此。Span 还具有其他数据，例如描述、带时间戳的事件、键值注释（标签）、导致它们的 Span 的 ID 以及进程 ID（通常是 IP 地址）。
+
+Spans can be started and stopped, and they keep track of their timing information. Once you create a span, you must stop it at some point in the future.
+Span 可以启动和停止，并且它们会跟踪其计时信息。创建 Span 后，您必须在将来的某个时刻停止它。
+
+**Trace:** A set of spans forming a tree-like structure. For example, if you run a distributed big-data store, a trace might be formed by a `PUT` request.
+**Trace：**一组形成树状结构的 Span。例如，如果您运行分布式大数据存储，则跟踪可能由请求形成`PUT`。
+
+**Annotation/Event:** Used to record the existence of an event in time.
+**注释/事件：**用于及时记录事件的存在。
+
+Conceptually in a typical RPC scenario we mark these events to highlight what kind of an action took place (it doesn’t mean that physically such an event will be set on a span).
+
+- **cs**: Client Sent. The client has made a request. This annotation indicates the start of the span.
+  客户端发送。客户已提出请求。该注释指示 Span 的开始。
+- **sr**: Server Received: The server side got the request and started processing it. Subtracting the `cs` timestamp from this timestamp reveals the network latency.
+  服务器已接收：服务器端收到请求并开始处理。从此时间戳中减去`cs`时间戳即可得出网络延迟。
+- **ss**: Server Sent. Annotated upon completion of request processing (when the response got sent back to the client). Subtracting the `sr` timestamp from this timestamp reveals the time needed by the server side to process the request.
+  服务器发送。在请求处理完成时（当响应发送回客户端时）进行注释。从这个时间戳中减去`sr`时间戳就可以得出服务器端处理请求所需的时间。
+- **cr**: Client Received. Signifies the end of the span. The client has successfully received the response from the server side. Subtracting the `cs` timestamp from this timestamp reveals the whole time needed by the client to receive the response from the server.
+  客户端已收到。表示 Span 的结束。客户端已成功收到服务器端的响应。从此时间戳中减去`cs`时间戳即可得出客户端从服务器接收响应所需的整个时间。
+
+![跟踪信息传播](./images/trace-id.jpg)
+
+![亲子关系](./images/parents.jpg)
+
+#### 2.11.2 引入
+
+`pom.xml`:
+
+```xml
+<!-- sleuth -->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-sleuth</artifactId>
+</dependency>
+
+<!-- zipkin -->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-sleuth-zipkin</artifactId>
+</dependency>
+```
+
+`application.yaml`:
+
+```yaml
+spring:
+  zipkin:
+    base-url: http://127.0.0.1:9411/
+  sleuth:
+    sampler:
+      probability: 1 # 采样率。介于 0 到 1 之间，1 则表示全部采集
+```
 

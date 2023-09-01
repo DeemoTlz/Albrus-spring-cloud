@@ -4,6 +4,11 @@ server:
 spring:
   application:
     name: albrus-cloud-payment-service  # 服务别名
+  zipkin:
+    base-url: http://127.0.0.1:9411/
+  sleuth:
+    sampler:
+      probability: 1 # 采样率。介于 0 到 1 之间，1 则表示全部采集
   datasource:
     url: jdbc:mysql://10.10.20.121:3306/albrus_cloud?useUnicode=true&characterEncoding=UTF-8&useSSL=false
     username: root
