@@ -74,7 +74,7 @@ Table 1. Release train Spring Boot compatibility
 | 2022.0.3     | 3.0.7       | 2022.0.0.0-RC2       |
 | **2021.0.8** | **2.6.15**  | **2021.0.5.0**       |
 
-## 二、微服务组件
+## 二、Spring Cloud
 
 ![Diagram](https://spring.io/img/extra/cloud-3.svg)
 
@@ -88,7 +88,7 @@ Table 1. Release train Spring Boot compatibility
 
 ![image-20230811195758352](./images/image-20230811195758352.png)
 
-### 2.1 Eureka
+### 2.1 Eureka (Netflix)
 
 服务注册中心，已停止更新。
 
@@ -1103,7 +1103,7 @@ spring:
 | ZooKeeper | Java | CP   | 支持         | 客户端       | 已集成            |
 | Consul    | GO   | CP   | 支持         | HTTP/DNS     | 已集成            |
 
-### 2.4 Ribbon
+### 2.4 Ribbon (Netflix) (TODO)
 
 #### 2.4.1 简介
 
@@ -1167,7 +1167,7 @@ Spring Cloud `2021.0.8` 版本管理的 Eureka 版本对应是 `<spring-cloud-ne
 </dependency>
 ```
 
-`Eureka 3.1.7` 集成 `Ribbon 2.2.10.RELEASE` 失败，总是提示 `No instances available for ALBRUS-CLOUD-PAYMENT-SERVICE`，Google、Baidu 都没有找到解决方案，只有 Nacos 集成 Ribbon 的教程，待后续学习到 Nacos 后再回过头来练习 Ribbon，这里先学习理论知识。
+`Eureka 3.1.7` 集成 `Ribbon 2.2.10.RELEASE` 失败，总是提示 `No instances available for ALBRUS-CLOUD-PAYMENT-SERVICE`，Google、Baidu 都没有找到解决方案，等先入门整套新理念后，再回过头来降级 Spring Cloud 版本练习 Ribbon，这里先学习理论知识。
 
 #### 2.4.3 负载算法
 
@@ -1287,7 +1287,7 @@ public class AlbrusCloudConsumerOrderRibbon80Application {
 }
 ```
 
-### 2.5 OpenFeign
+### 2.5 Feign (Netflix) VS OpenFeign
 
 > https://spring.io/projects/spring-cloud-openfeign
 >
@@ -1425,7 +1425,7 @@ feign.RetryableException: Read timed out executing GET http://ALBRUS-CLOUD-PAYME
 
 需要在日志框架配置中配置 Feign Service 的日志输出级别。
 
-### 2.6 Hystrix
+### 2.6 Hystrix (Netflix)
 
 > https://github.com/Netflix/Hystrix
 >
@@ -2043,7 +2043,7 @@ The following sections will explain this flow in greater detail:
 - 当熔断器开启，就熔断请求，执行 Fallback
 - 整个框架采用的 RxJava 的编程模式，回调函数满天飞
 
-### 2.7 Gateway
+### 2.7 Zuul (Netflix) VS Gateway
 
 #### 2.7.1 简介
 
@@ -3678,3 +3678,347 @@ spring:
       probability: 1 # 采样率。介于 0 到 1 之间，1 则表示全部采集
 ```
 
+## 三、Spring Cloud Alibaba
+
+### 3.1 为什么需要？
+
+> https://spring.io/blog/2018/12/12/spring-cloud-greenwich-rc1-available-now
+
+Spring Cloud Netflix 项目进入了**维护模式 - Maintenance Mode**！
+
+**What is Maintenance Mode?**
+
+Placing a module in maintenance mode means that the Spring Cloud team will **no longer be adding new features** to the module. **We will fix blocker bugs and security issues**, and we will also consider and review small pull requests from the community.
+
+We intend to continue to support these modules for a period of **at least** a year from the general availability of the [Greenwich release train](https://github.com/spring-cloud/spring-cloud-release/milestones?direction=asc&sort=due_date).
+
+不再向该模块添加新功能，仅仅修复阻止程序错误和安全问题。
+
+### 3.2 能干嘛？
+
+> https://github.com/alibaba/spring-cloud-alibaba/blob/2.2.x/README-zh.md
+
+**主要功能**
+
+- **服务限流降级**：默认支持 WebServlet、WebFlux、OpenFeign、RestTemplate、Spring Cloud Gateway、Zuul、Dubbo 和 RocketMQ 限流降级功能的接入，可以在运行时通过控制台实时修改限流降级规则，还支持查看限流降级 Metrics 监控。
+- **服务注册与发现**：适配 Spring Cloud 服务注册与发现标准，默认集成了 Ribbon 的支持。
+- **分布式配置管理**：支持分布式系统中的外部化配置，配置更改时自动刷新。
+- **消息驱动能力**：基于 Spring Cloud Stream 为微服务应用构建消息驱动能力。
+- **分布式事务**：使用 @GlobalTransactional 注解， 高效并且对业务零侵入地解决分布式事务问题。
+- **阿里云对象存储**：阿里云提供的海量、安全、低成本、高可靠的云存储服务。支持在任何应用、任何时间、任何地点存储和访问任意类型的数据。
+- **分布式任务调度**：提供秒级、精准、高可靠、高可用的定时（基于 Cron 表达式）任务调度服务。同时提供分布式的任务执行模型，如网格任务。网格任务支持海量子任务均匀分配到所有 Worker（schedulerx-client）上执行。
+- **阿里云短信服务**：覆盖全球的短信服务，友好、高效、智能的互联化通讯能力，帮助企业迅速搭建客户触达通道。
+
+**组件**
+
+**[Sentinel](https://github.com/alibaba/Sentinel)**：把流量作为切入点，从流量控制、熔断降级、系统负载保护等多个维度保护服务的稳定性。
+
+**[Nacos](https://github.com/alibaba/Nacos)**：一个更易于构建云原生应用的动态服务发现、配置管理和服务管理平台。
+
+**[RocketMQ](https://rocketmq.apache.org/)**：一款开源的分布式消息系统，基于高可用分布式集群技术，提供低延时的、高可靠的消息发布与订阅服务。
+
+**[Seata](https://github.com/seata/seata)**：阿里巴巴开源产品，一个易于使用的高性能微服务分布式事务解决方案。
+
+**[Alibaba Cloud OSS](https://www.aliyun.com/product/oss)**: 阿里云对象存储服务（Object Storage Service，简称 OSS），是阿里云提供的海量、安全、低成本、高可靠的云存储服务。您可以在任何应用、任何时间、任何地点存储和访问任意类型的数据。
+
+**[Alibaba Cloud SchedulerX](https://cn.aliyun.com/aliware/schedulerx)**: 阿里中间件团队开发的一款分布式任务调度产品，提供秒级、精准、高可靠、高可用的定时（基于 Cron 表达式）任务调度服务。
+
+**[Alibaba Cloud SMS](https://www.aliyun.com/product/sms)**: 覆盖全球的短信服务，友好、高效、智能的互联化通讯能力，帮助企业迅速搭建客户触达通道。
+
+### 3.3 官网
+
+> https://spring.io/projects/spring-cloud-alibaba
+>
+> https://github.com/alibaba/spring-cloud-alibaba/blob/2021.x/README-zh.md
+>
+> https://spring-cloud-alibaba-group.github.io/github-pages/2021/en-us/index.html
+
+### 3.4 Nacos
+
+Nacos = Naming Configuration Service (Dynamic Naming and Configuration Service)
+
+即：**注册中心 + 配置中心**，等价于：Eureka + Config + Bus。
+
+> https://github.com/alibaba/Nacos
+>
+> https://nacos.io/zh-cn/
+
+#### 3.4.1 安装运行
+
+> https://nacos.io/zh-cn/docs/v2/quickstart/quick-start.html
+>
+> https://github.com/alibaba/nacos/releases
+
+```bash
+unzip nacos-server-$version.zip 或者 tar -xvf nacos-server-$version.tar.gz
+cd nacos/bin
+
+# standalone 代表着单机模式运行，非集群模式
+sh startup.sh -m standalone
+```
+
+**防火墙**
+
+```bash
+# tcp6       0      0 :::9848                 :::*                    LISTEN      2518/java
+# tcp6       0      0 :::9849                 :::*                    LISTEN      2518/java
+# tcp6       0      0 :::7848                 :::*                    LISTEN      2518/java
+# tcp6       0      0 :::8848                 :::*                    LISTEN      2518/java 
+
+sudo ufw allow 9848
+sudo ufw allow 9849
+sudo ufw allow 7848
+sudo ufw allow 8848
+```
+
+Nacos2.0 以后增加了 gRpc 客户端和服务端通信的长连接 9848 和 9849 端口，需要一起开放，否则会出现集群脑裂。
+
+`http://10.10.20.161:8848/nacos`
+
+#### 3.4.2 服务注册与发现
+
+**启动 Nacos 服务发现**
+
+![echo service](./images/1542119181336-b6dc0fc1-ed46-43a7-9e5f-68c9ca344d60.png)
+
+##### 3.4.2.1 服务端
+
+`pom.xml`:
+
+```xml
+<!-- alibaba-nacos -->
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+</dependency>
+```
+
+` application.yaml`:
+
+```yaml
+server:
+  port: 9001
+
+spring:
+  application:
+    name: albrus-cloud-payment-service  # 服务别名
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 10.10.20.161:8848
+```
+
+`AlbrusCloudPayment9001Application.java`:
+
+```java
+@SpringBootApplication
+@EnableDiscoveryClient
+public class AlbrusCloudPayment9001Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(AlbrusCloudPayment9001Application.class, args);
+    }
+
+}
+```
+
+##### 3.4.2.2 客户端
+
+`pom.xml`:
+
+```xml
+<!-- alibaba-nacos -->
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+</dependency>
+
+<!-- loadbalancer -->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+</dependency>
+```
+
+==注意：**Nacos 2021 版本已经没有自带 Ribbon 的整合，需要手动引入 `loadbalancer`。**==
+
+` application.yaml`:
+
+```yaml
+server:
+  port: 83
+
+spring:
+  application:
+    name: albrus-cloud-order-service  # 服务别名
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 10.10.20.161:8848
+
+service-url: # 消费者将要去访问的微服务名称（注册到 Nacos 的微服务提供者）
+  nacos-base-service: http://albrus-cloud-payment-service
+  module:
+    payment: ${service-url.nacos-base-service}/payment
+```
+
+`AlbrusCloudConsumerOrder83Application.java`:
+
+```java
+@SpringBootApplication
+@EnableDiscoveryClient
+public class AlbrusCloudConsumerOrder83Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(AlbrusCloudConsumerOrder83Application.class, args);
+    }
+
+}
+```
+
+`OrderController.java`:
+
+```java
+@Slf4j
+@RestController
+@RequestMapping("/consumer/order")
+public class OrderController {
+
+    // private static final String BASE_URL = "http://127.0.0.1:8001";
+    /**
+     * 通过在 Nacos 上注册过的微服务名称调用
+     */
+    @Value("${service-url.module.payment}")
+    private String PAYMENT_URL;
+
+    private final RestTemplate restTemplate;
+
+    public OrderController(RestTemplate restTemplate) {
+        this.restTemplate = restTemplate;
+    }
+
+    @GetMapping(value = "/{id}")
+    public Result<PaymentVO> getPaymentById(@PathVariable("id") Long id) {
+        // http://127.0.0.1:83/consumer/order/31
+        return restTemplate.getForObject(PAYMENT_URL + "/" + id, Result.class);
+    }
+
+    @PostMapping
+    public Result<Integer> create(@RequestBody PaymentVOParams paymentVOParams) {
+        // log.info("The result of save payment: [{}] is [{}].", paymentVOParams.getSerial(), result);
+        return restTemplate.postForObject(PAYMENT_URL, paymentVOParams, Result.class);
+    }
+
+}
+```
+
+##### 3.4.2.3 OpenFeign 客户端
+
+`pom.xml`:
+
+```xml
+<!-- loadbalancer -->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+</dependency>
+
+<!-- openfeign -->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-openfeign</artifactId>
+</dependency>
+```
+
+`PaymentFeignService.java`:
+
+```java
+@Component
+@FeignClient(value = "albrus-cloud-payment-service", path = "/payment")
+public interface PaymentFeignService {
+
+    @GetMapping(value = "/{id}")
+    Result<PaymentVO> getPaymentById(@PathVariable("id") Long id);
+
+    @GetMapping(value = "/longtime/{id}")
+    Result<PaymentVO> getPaymentByIdLongtime(@PathVariable("id") Long id);
+
+    @GetMapping(value = "/discoveryClientInfo")
+    Result<ServiceInstance> getDiscoveryClientInfo();
+
+    @PostMapping
+    Result<Integer> create(@RequestBody PaymentVOParams paymentVOParams);
+
+}
+```
+
+`OrderController.java`:
+
+```java
+@Slf4j
+@RestController
+@RequestMapping("/consumer/order")
+public class OrderController {
+
+    private final PaymentFeignService paymentFeignService;
+
+    public OrderController(PaymentFeignService paymentFeignService) {
+        this.paymentFeignService = paymentFeignService;
+    }
+
+    @GetMapping(value = "/{id}")
+    public Result<PaymentVO> getPaymentById(@PathVariable("id") Long id) {
+        // http://127.0.0.1:83/consumer/order/31
+        return paymentFeignService.getPaymentById(id);
+    }
+
+    @PostMapping
+    public Result<Integer> create(@RequestBody PaymentVOParams paymentVOParams) {
+        // log.info("The result of save payment: [{}] is [{}].", paymentVOParams.getSerial(), result);
+        return paymentFeignService.create(paymentVOParams);
+    }
+
+}
+```
+
+##### 3.4.2.3 注册中心对比
+
+**Nacos 生态图**
+
+![nacos_landscape.png](./images/1533045871534-e64b8031-008c-4dfc-b6e8-12a597a003fb.png)
+
+**CAP**
+
+- C：所有节点在同一时间看到的数据是一致的
+
+- A：所有的请求都会收到响应
+
+**何时选择使用何种模式？**
+一般来说，如果不需要存储服务级别的信息且服务实例是通过 nacos-client 注册，并能够保持心跳上报，那么就可以选择 AP 模式。
+当前主流的服务如 Spring cloud 和 Dubbo 服务，都适用于 AP 模式，**AP 模式为了服务的可能性而减弱了一致性，因此 AP 模式下只支持注册临时实例**。
+
+如果需要在服务级别编辑或者存储配置信息，那么 CP 是必须，K8S 服务和 DNS 服务则适用于 CP 模式。
+**CP 模式下则支持注册持久化实例**，此时则是以 Raft 协议为集群运行模式，该模式下注册实例之前必须先注册服务，如果服务不存在，则会返回错误。
+
+![图像](./images/%E5%9B%BE%E5%83%8F-1693728003253-5.png)
+
+| 服务注册与发现框架 | CAP     | 控制台管理 | 社区活跃度     |
+| ------------------ | ------- | ---------- | -------------- |
+| Eureka             | AP      | 支持       | 低（2.x 闭源） |
+| Zookeeper          | CP      | 不支持     | 中             |
+| Consul             | CP      | 支持       | 高             |
+| Nacos              | AP + CP | 支持       | 高             |
+
+**Nacos 切换 CAP**
+
+`curl -X PUT '$NACOS_SERVER:8848/nacos/v1/ns/operator/switches?entry=serverMode&value=CP'`
+
+
+
+
+
+
+
+
+
+![图像1](./images/%E5%9B%BE%E5%83%8F1.png)

@@ -1,0 +1,23 @@
+server:
+  port: 83
+
+spring:
+  application:
+    name: albrus-cloud-order-service  # 服务别名
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 10.10.20.161:8848
+feign:
+  client:
+    config:
+      # ALBRUS-CLOUD-PAYMENT-SERVICE:
+      default:
+        connectTimeout: 4000  # 连接超时时间
+        readTimeout: 4000  # 读取（等待）数据时间
+        loggerLevel: FULL
+
+service-url: # 消费者将要去访问的微服务名称（注册到 Nacos 的微服务提供者）
+  nacos-base-service: http://albrus-cloud-payment-service
+  module:
+    payment: ${service-url.nacos-base-service}/payment
