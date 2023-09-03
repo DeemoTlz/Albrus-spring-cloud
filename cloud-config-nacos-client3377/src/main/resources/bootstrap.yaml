@@ -1,0 +1,17 @@
+server:
+  port: 3377
+
+spring:
+  application:
+    name: albrus-cloud-config-nacos-client  # 服务别名
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 10.10.20.161:8848 # Nacos 服务注册中心地址
+      config:
+        server-addr: 10.10.20.161:8848 # Nacos 配置中心地址
+        file-extension: yaml # 指定 yaml 格式的配置
+        group: LJS_GROUP # 指定 Group
+        namespace: 468f81d7-09d6-481a-af26-53b500ce7c56 # 指定 DEV NameSpace
+
+# ${spring.application.name}-${spring.profile.active}.${spring.cloud.nacos.config.file-extension}

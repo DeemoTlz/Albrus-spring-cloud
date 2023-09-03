@@ -4013,12 +4013,226 @@ public class OrderController {
 
 `curl -X PUT '$NACOS_SERVER:8848/nacos/v1/ns/operator/switches?entry=serverMode&value=CP'`
 
-
-
-
-
-
-
-
-
 ![图像1](./images/%E5%9B%BE%E5%83%8F1.png)
+
+#### 3.4.3 配置中心
+
+> https://spring-cloud-alibaba-group.github.io/github-pages/2021/en-us/index.html#_spring_cloud_alibaba_nacos_config
+>
+> https://github.com/alibaba/spring-cloud-alibaba/wiki/Nacos-config
+>
+> https://nacos.io/zh-cn/docs/v2/ecology/use-nacos-with-spring-cloud.html
+
+##### 3.4.3.1 客户端
+
+`pom.xml`:
+
+```xml
+<!-- nacos-discovery -->
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+</dependency>
+
+<!-- nacos-config -->
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+</dependency>
+
+<!-- bootstrap -->
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-bootstrap</artifactId>
+</dependency>
+```
+
+==注意：**引入 `spring-cloud-starter-bootstrap` 为了让 bootstrap.yaml 配置文件加载生效：**==
+
+Note that when your `spring-cloud-alibaba’s version is ``2021.1`, since the `nacos` gets the configuration in the `bootstrap.yml `file Will be loaded before the `application.yml` file. According to the official documentation of spring mentioned [bootstrap](https://docs.spring.io/spring-cloud-config/docs/current/reference/html/#config-first-bootstrap) To solve this problem, we recommend that you add the `spring-cloud-starter-bootstrap` dependencies to the project root `pom.xml` file.
+
+`bootstrap.yaml`:
+
+```yaml
+server:
+  port: 3377
+
+spring:
+  application:
+    name: albrus-cloud-config-nacos-client  # 服务别名
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 10.10.20.161:8848 # Nacos 服务注册中心地址
+      config:
+        server-addr: 10.10.20.161:8848 # Nacos 配置中心地址
+        file-extension: yaml # 指定 yaml 格式的配置
+
+# ${spring.application.name}-${spring.profile.active}.${spring.cloud.nacos.config.file-extension}
+```
+
+`application.yaml`:
+
+```yaml
+spring:
+  profiles:
+    active: dev # 开发环境
+```
+
+==注意：**为什么需要两个配置文件？无缝切换、bootstrap 优先级高于 application。**==
+
+`AlbrusCloudConfigClient3377Application.java`:
+
+```java
+@SpringBootApplication
+@EnableDiscoveryClient
+public class AlbrusCloudConfigClient3377Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(AlbrusCloudConfigClient3377Application.class, args);
+    }
+
+}
+```
+
+`ConfigClientController.java`:
+
+```java
+/**
+ * {@link RefreshScope} 支持 Nacos 的动态刷新功能
+ */
+@RefreshScope
+@RestController
+@RequestMapping("/config/client")
+public class ConfigClientController {
+
+    @Value("${config.info}")
+    private String configInfo;
+
+    @GetMapping("/info")
+    public String getConfigInfo() {
+        return this.configInfo;
+    }
+
+}
+```
+
+`@RefreshScope`: 支持 Nacos 的动态刷新功能。
+
+##### 3.4.3.2 配置规则
+
+在 Nacos Spring Cloud 中，`dataId` 的完整格式如下：
+
+```plain
+${prefix}-${spring.profiles.active}.${file-extension}
+```
+
+- `prefix` 默认为 `spring.application.name` 的值，也可以通过配置项 `spring.cloud.nacos.config.prefix`来配置。
+- `spring.profiles.active` 即为当前环境对应的 profile，详情可以参考 [Spring Boot文档](https://docs.spring.io/spring-boot/docs/current/reference/html/boot-features-profiles.html#boot-features-profiles)。 
+  **注意：当 `spring.profiles.active` 为空时，对应的连接符 `-` 也将不存在，dataId 的拼接格式变成：`${prefix}.${file-extension}`**
+- `file-exetension` 为配置内容的数据格式，可以通过配置项 `spring.cloud.nacos.config.file-extension` 来配置。目前只支持 `properties` 和 `yaml` 类型。
+
+##### 3.4.3.3 配置列表
+
+Nacos 配置已导出到 `doc/cloud-config-repo/` 下：
+
+```plain
+nacos_config_export_20230903192921.zip
+nacos_config_export_20230903192927（新版）.zip
+```
+
+![image-20230903175844112](./images/image-20230903175844112.png)
+
+**回滚**
+
+![image-20230903175825329](./images/image-20230903175825329.png)
+
+##### 3.4.3.4 分类配置
+
+**多环境管理？**
+
+开发环境、测试环境、生产环境。
+
+**多项目管理？**
+
+微服务拆分位多个子项目，子项目又会有相应的开发环境、测试环境、生产环境，现实中还会有其他各种各样的差异带来不同的配置环境。
+
+**在微服务架构系统下，配置环境爆炸，那么如何进行管理呢？**
+
+图形化界面：
+
+- 命名空间 NameSpace
+  用于进行租户粒度的配置隔离。不同的命名空间下，可以存在相同的 Group 或 Data ID 的配置。Namespace 的常用场景之一是**不同环境的配置的区分隔离**，例如开发测试环境和生产环境的资源（如配置、服务）隔离等。
+- 配置集 Configuration Set
+  一组相关或者不相关的配置项的集合称为配置集。在系统中，一个配置文件通常就是一个配置集，包含了系统各个方面的配置。例如，**一个配置集可能包含了数据源、线程池、日志级别等配置项**。
+- Group
+  Nacos 中的一组配置集，是组织配置的维度之一。通过一个有意义的字符串（如 Buy 或 Trade ）对配置集进行分组，从而**区分 Data ID 相同的配置集**。当您在 Nacos 上创建一个配置时，如果未填写配置分组的名称，则配置分组的名称默认采用 DEFAULT_GROUP 。配置分组的常见场景：**不同的应用或组件使用了相同的配置类型**，如 database_url 配置和 MQ_topic 配置。
+  把不同微服务划分到同一个分组中。
+- Data Id
+  Nacos 中的某个配置集的 ID。配置集 ID 是组织划分配置的维度之一。Data ID 通常用于组织划分系统的配置集。一个系统或者应用可以包含多个配置集，每个配置集都可以被一个有意义的名称标识。Data ID 通常采用类 Java 包（如 com.taobao.tc.refund.log.level）的命名规则保证**全局唯一性**。此命名规则非强制。
+
+![image-20230903190751986](./images/image-20230903190751986.png)
+
+Nacos默认的命名空间是public，Namespace主要用来实现隔离（开发、测试、生产）。
+
+Group 默认是 DEFAULT_GROUP，Group 可以把不同的微服务划分到同一个分组里面去。
+
+Service 就是微服务，一个 Service 可以包含多个 Cluster（集群），Nacos 默认 Cluster 是 DEFAULT，Cluster 是对指定微服务的一个虚拟划分（容灾：杭州集群、广州集群）。
+
+Instance 就是一个个微服务实例。
+
+**Data Id 方案加载配置**
+
+![image-20230903175844112](./images/image-20230903175844112.png)
+
+`application.yaml`:
+
+```yaml
+spring:
+  profiles:
+    active: dev # 开发环境
+```
+
+**Group 方案加载配置**
+
+![image-20230903192056002](./images/image-20230903192056002.png)
+
+`bootstrap.yaml`:
+
+```yaml
+spring:
+  application:
+    name: albrus-cloud-config-nacos-client  # 服务别名
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 10.10.20.161:8848 # Nacos 服务注册中心地址
+      config:
+        server-addr: 10.10.20.161:8848 # Nacos 配置中心地址
+        file-extension: yaml # 指定 yaml 格式的配置
+        group: LJS_GROUP # 指定 Group
+```
+
+**NameSpace 方案加载配置**
+
+![image-20230903192233650](./images/image-20230903192233650.png)
+
+![image-20230903192434183](./images/image-20230903192434183.png)
+
+`bootstrap.yaml`:
+
+```yaml
+spring:
+  application:
+    name: albrus-cloud-config-nacos-client  # 服务别名
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 10.10.20.161:8848 # Nacos 服务注册中心地址
+      config:
+        server-addr: 10.10.20.161:8848 # Nacos 配置中心地址
+        file-extension: yaml # 指定 yaml 格式的配置
+        group: LJS_GROUP # 指定 Group
+        namespace: 468f81d7-09d6-481a-af26-53b500ce7c56 # 指定 DEV NameSpace
+```
+
