@@ -4236,3 +4236,207 @@ spring:
         namespace: 468f81d7-09d6-481a-af26-53b500ce7c56 # 指定 DEV NameSpace
 ```
 
+##### 3.4.3.5 共享配置
+
+> https://github.com/alibaba/spring-cloud-alibaba/wiki/Nacos-config
+
+**支持自定义扩展的 Data Id 配置**
+
+Spring Cloud Alibaba Nacos Config 从 0.2.1 版本后，可支持自定义 Data Id 的配置。关于这部分详细的设计可参考 [这里](https://github.com/spring-cloud-incubator/spring-cloud-alibaba/issues/141)。 一个完整的配置案例如下所示：
+
+```properties
+spring.application.name=opensource-service-provider
+spring.cloud.nacos.config.server-addr=127.0.0.1:8848
+
+# config external configuration
+# 1、Data Id 在默认的组 DEFAULT_GROUP,不支持配置的动态刷新
+spring.cloud.nacos.config.extension-configs[0].data-id=ext-config-common01.properties
+
+# 2、Data Id 不在默认的组，不支持动态刷新
+spring.cloud.nacos.config.extension-configs[1].data-id=ext-config-common02.properties
+spring.cloud.nacos.config.extension-configs[1].group=GLOBALE_GROUP
+
+# 3、Data Id 既不在默认的组，也支持动态刷新
+spring.cloud.nacos.config.extension-configs[2].data-id=ext-config-common03.properties
+spring.cloud.nacos.config.extension-configs[2].group=REFRESH_GROUP
+spring.cloud.nacos.config.extension-configs[2].refresh=true
+```
+
+可以看到:
+
+- 通过 `spring.cloud.nacos.config.extension-configs[n].data-id` 的配置方式来支持多个 Data Id 的配置。
+- 通过 `spring.cloud.nacos.config.extension-configs[n].group` 的配置方式自定义 Data Id 所在的组，不明确配置的话，默认是 DEFAULT_GROUP。
+- 通过 `spring.cloud.nacos.config.extension-configs[n].refresh` 的配置方式来控制该 Data Id 在配置变更时，是否支持应用中可动态刷新， 感知到最新的配置值。默认是不支持的。
+
+| Note | 多个 Data Id 同时配置时，他的优先级关系是 `spring.cloud.nacos.config.extension-configs[n].data-id` 其中 n 的值越大，优先级越高。 |
+| ---- | ------------------------------------------------------------ |
+
+| Note | `spring.cloud.nacos.config.extension-configs[n].data-id` 的值必须带文件扩展名，文件扩展名既可支持 properties，又可以支持 yaml/yml。 此时 `spring.cloud.nacos.config.file-extension` 的配置对自定义扩展配置的 Data Id 文件扩展名没有影响。 |
+| ---- | ------------------------------------------------------------ |
+
+通过自定义扩展的 Data Id 配置，既可以解决**多个应用间配置共享**的问题，又可以支持**一个应用有多个配置文件**。
+
+为了更加清晰的在多个应用间配置共享的 Data Id ，你可以通过以下的方式来配置：
+
+```properties
+# 配置支持共享的 Data Id
+spring.cloud.nacos.config.shared-configs[0].data-id=common.yaml
+
+# 配置 Data Id 所在分组，缺省默认 DEFAULT_GROUP
+spring.cloud.nacos.config.shared-configs[0].group=GROUP_APP1
+
+# 配置Data Id 在配置变更时，是否动态刷新，缺省默认 false
+spring.cloud.nacos.config.shared-configs[0].refresh=true
+```
+
+可以看到：
+
+- 通过 `spring.cloud.nacos.config.shared-configs[n].data-id` 来支持多个共享 Data Id 的配置。
+- 通过 `spring.cloud.nacos.config.shared-configs[n].group` 来配置自定义 Data Id 所在的组，不明确配置的话，默认是 DEFAULT_GROUP。
+- 通过 `spring.cloud.nacos.config.shared-configs[n].refresh` 来控制该Data Id在配置变更时，是否支持应用中动态刷新，默认 `false`。
+
+**配置的优先级**
+
+Spring Cloud Alibaba Nacos Config 目前提供了三种配置能力从 Nacos 拉取相关的配置。
+
+- A: 通过 `spring.cloud.nacos.config.shared-configs[n].data-id` 支持多个共享 Data Id 的配置
+- B: 通过 `spring.cloud.nacos.config.extension-configs[n].data-id` 的方式支持多个扩展 Data Id 的配置
+- C: 通过内部相关规则(应用名、应用名 + Profile )自动生成相关的 Data Id 配置
+
+当三种方式共同使用时，他们的一个优先级关系是:A < B < C。
+
+#### 3.4.4 集群
+
+> https://nacos.io/zh-cn/docs/v2/guide/admin/deployment.html
+
+Nacos 支持三种部署模式：
+
+- 单机模式
+- 集群模式 - 用于生产环境，确保高可用
+- 多集群模式 - 用于多数据中心场景
+
+##### 3.4.4.1 单机模式
+
+在 0.7 版本之前，在单机模式时 Nacos 使用**嵌入式数据库（derby）**实现数据的存储，不方便观察数据存储的基本情况。0.7 版本增加了支持 MySQL 数据源能力，具体的操作步骤：
+
+1. 安装数据库，版本要求：5.6.5+
+2. 初始化 MySQL 数据库，数据库初始化文件：`nacos/conf/mysql-schema.sql`
+3. 修改 `nacos/conf/application.properties` 文件，增加支持 MySQL 数据源配置（目前只支持 MySQL），添加 MySQL 数据源的 url、用户名和密码。
+
+```properties
+spring.datasource.platform=mysql
+
+db.num=1
+db.url.0=jdbc:mysql://127.0.0.1:3306/nacos_devtest?characterEncoding=utf8&connectTimeout=1000&socketTimeout=3000&autoReconnect=true
+db.user=nacos_devtest
+db.password=youdontknow
+```
+
+再以单机模式启动 Nacos，nNcos所有写嵌入式数据库的数据都写到了 MySQL。
+
+![image-20230913194138266](./images/image-20230913194138266.png)
+
+**嵌入式数据库**
+
+> https://github.com/alibaba/nacos/blob/develop/pom.xml
+
+```xml
+<derby.version>10.14.2.0</derby.version>
+<dependency>
+    <groupId>org.apache.derby</groupId>
+    <artifactId>derby</artifactId>
+    <version>${derby.version}</version>
+</dependency>
+```
+
+##### 3.4.4.2 集群模式
+
+> https://nacos.io/zh-cn/docs/v2/guide/admin/cluster-mode-quick-start.html
+
+**集群部署架构图**
+
+![deployDnsVipMode.jpg](./images/deployDnsVipMode.jpg)
+
+**推荐把所有服务列表放到一个 VIP 下面，然后挂到一个域名下面。**
+
+- `[http://ip1](http://ip1/):port/openAPI` - 直连 IP 模式，机器挂则需要修改 IP 才可以使用。
+- `[http://SLB](http://slb/):port/openAPI` - 挂载 SLB 模式(内网 SLB，不可暴露到公网，以免带来安全风险)，直连 SLB 即可，下面挂 Server 真实 IP，可读性不好。
+- `[http://nacos.com](http://nacos.com/):port/openAPI` - **域名 + SLB 模式**(内网 SLB，不可暴露到公网，以免带来安全风险)，可读性好，而且换 IP 方便，**推荐模式**。
+
+![deployDnsVipMode.jpg](./images/deployDnsVipMode-1694604814508-3.jpg)
+
+| 端口 | 与主端口的偏移量 | 描述                                                         |
+| ---- | ---------------- | ------------------------------------------------------------ |
+| 8848 | 0                | 主端口，客户端、控制台及 OpenAPI 所使用的 HTTP 端口          |
+| 9848 | 1000             | 客户端 gRPC 请求服务端端口，用于客户端向服务端发起连接和请求 |
+| 9849 | 1001             | 服务端 gRPC 请求服务端端口，用于服务间同步等                 |
+| 7848 | -1000            | Jraft 请求服务端端口，用于处理服务端间的 Raft 相关请求       |
+
+**使用 VIP/Nginx 请求时，需要配置成 TCP 转发，不能配置 http2 转发，否则连接会被 Nginx 断开。** 
+
+**9849 和 7848 端口为服务端之间的通信端口，请勿暴露到外部网络环境和客户端测。**
+
+**配置集群配置文件**
+
+将配置文件 `nacos/conf/cluster.conf` 的每行配置成 `IP:port`。（请配置 3 个或 3 个以上节点）
+
+```properties
+# IP:port
+200.8.9.16:8848
+200.8.9.17:8848
+200.8.9.18:8848
+```
+
+**开启默认鉴权插件（可选）**
+
+- Nacos 是一个内部微服务组件，需要在可信的内部网络中运行，不可暴露在公网环境，防止带来安全风险。
+- **Nacos 提供简单的鉴权实现，为防止业务错用的弱鉴权体系，不是防止恶意攻击的强鉴权体系**。
+- 如果运行在不可信的网络环境或者有强鉴权诉求，请参考官方简单实现做进行[自定义插件开发](https://nacos.io/zh-cn/docs/v2/plugin/auth-plugin.html)。
+
+之后修改`nacos/conf/application.properties` 文件，设置其中：
+
+```properties
+nacos.core.auth.enabled=true
+nacos.core.auth.system.type=nacos
+nacos.core.auth.plugin.nacos.token.secret.key=${自定义，保证所有节点一致}
+nacos.core.auth.server.identity.key=${自定义，保证所有节点一致}
+nacos.core.auth.server.identity.value=${自定义，保证所有节点一致}
+```
+
+上述内容详情可查看[权限认证](https://nacos.io/zh-cn/docs/v2/guide/user/auth.html)。
+
+##### 3.4.4.3 多集群模式
+
+Nacos 支持 NameServer 路由请求模式，通过它您可以设计一个有用的映射规则来控制请求转发到相应的集群，在映射规则中您可以按命名空间或租户等分片请求...
+
+**多网卡 IP 选择**
+
+当本地环境比较复杂的时候，Nacos 服务在启动的时候需要选择运行时使用的 IP 或者网卡。
+
+Nacos 从多网卡获取 IP 参考 Spring Cloud 设计，通过 `nacos.inetutils` 参数，可以指定 Nacos 使用的网卡和 IP 地址。目前支持的配置参数有:
+
+- `ip-address` 参数可以直接设置 Nacos 的 IP
+
+```properties
+nacos.inetutils.ip-address=10.11.105.155
+```
+
+- `use-only-site-local-interfaces` 参数可以让 Nacos 使用局域网 IP，这个在 Nacos 部署的机器有多网卡时很有用，可以让 Nacos 选择局域网网卡
+
+```properties
+nacos.inetutils.use-only-site-local-interfaces=true
+```
+
+- `ignored-interfaces` 支持网卡数组，可以让 Nacos 忽略多个网卡
+
+```properties
+nacos.inetutils.ignored-interfaces[0]=eth0
+nacos.inetutils.ignored-interfaces[1]=eth1
+```
+
+- `preferred-networks` 参数可以让 Nacos 优先选择匹配的 IP，支持正则匹配和前缀匹配
+
+```properties
+nacos.inetutils.preferred-networks[0]=30.5.124.
+nacos.inetutils.preferred-networks[0]=30.5.124.(25[0-5]|2[0-4]\\d|((1d{2})|([1-9]?\\d))),30.5.124.(25[0-5]|2[0-4]\\d|((1d{2})|([1-9]?\\d)))
+```
